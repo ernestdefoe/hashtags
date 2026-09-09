@@ -6,7 +6,7 @@ use Ernestdefoe\Hashtags\Formatter\ConfigureHashtags;
 use Ernestdefoe\Hashtags\Model\Hashtag;
 use Flarum\Post\CommentPost;
 use Flarum\Post\Post;
-use Illuminate\Database\ConnectionInterface;
+use Illuminate\Database\Connection;
 use s9e\TextFormatter\Utils;
 
 /**
@@ -18,7 +18,13 @@ use s9e\TextFormatter\Utils;
  */
 class HashtagSyncer
 {
-    public function __construct(protected ConnectionInterface $db) {}
+    /**
+     * Typed as the concrete Connection rather than ConnectionInterface because
+     * recount() needs getTablePrefix(), which the interface does not declare.
+     * Flarum binds ConnectionInterface to this class, so nothing changes at
+     * the container level.
+     */
+    public function __construct(protected Connection $db) {}
 
     public function sync(Post $post): void
     {
@@ -199,14 +205,34 @@ class HashtagSyncer
             return;
         }
 
+        /**
+         * 🚨 selectRaw() is passed through VERBATIM — the query builder only
+         * applies the table prefix to identifiers it wraps itself.
+         *
+         * `from`, `join`, `where` and `groupBy` all came out correctly prefixed
+         * while the select list did not, producing
+         * "Unknown column 'post_hashtag.hashtag_id' in 'field list'" on every
+         * install configured with a table prefix. Because this runs from the
+         * post-save sync, it did not just break `hashtags:reindex` — it made
+         * POST /api/discussions return a 500, so nobody could post at all.
+         *
+         * Interpolating getTablePrefix() is what core itself does; see
+         * Flarum\Post\Post::boot(), which builds its post-number expression
+         * the same way. An unprefixed install returns '' here, so this is
+         * correct in both cases.
+         */
+        $prefix = $this->db->getTablePrefix();
+        $pivot = $prefix.'post_hashtag';
+        $posts = $prefix.'posts';
+
         $totals = $this->db->table('post_hashtag')
             ->join('posts', 'posts.id', '=', 'post_hashtag.post_id')
             ->whereIn('post_hashtag.hashtag_id', $hashtagIds)
             ->groupBy('post_hashtag.hashtag_id')
-            ->selectRaw('post_hashtag.hashtag_id as hashtag_id')
+            ->selectRaw($pivot.'.hashtag_id as hashtag_id')
             ->selectRaw('COUNT(*) as post_count')
-            ->selectRaw('COUNT(DISTINCT post_hashtag.discussion_id) as discussion_count')
-            ->selectRaw('MAX(posts.created_at) as last_used_at')
+            ->selectRaw('COUNT(DISTINCT '.$pivot.'.discussion_id) as discussion_count')
+            ->selectRaw('MAX('.$posts.'.created_at) as last_used_at')
             ->get()
             ->keyBy('hashtag_id');
 
