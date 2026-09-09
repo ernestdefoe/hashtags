@@ -9,3 +9,6 @@
 *.log
 .DS_Store
 Thumbs.db
+
+# Announcement drafts — marketing copy, kept locally, not part of the package
+/docs/announcement*.md
