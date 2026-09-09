@@ -1,0 +1,170 @@
+// Inline hashtag links inside post content.
+//
+// Deliberately quieter than a TagMention: a tag mention points at a curated
+// part of the forum and earns its colour, whereas a hashtag is a word somebody
+// typed. Making them look identical would imply a structure that isn't there.
+.Hashtag {
+  color: @primary-color;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 4px;
+  padding-inline: 2px;
+
+  &:hover,
+  &:focus {
+    color: @primary-color;
+    background: fade(@primary-color, 12%);
+    text-decoration: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid @primary-color;
+    outline-offset: 1px;
+  }
+}
+
+// ── Feed page ────────────────────────────────────────────────────────────
+.HashtagPage-header {
+  background: @control-bg;
+  padding-block: 30px 24px;
+  margin-block-end: 20px;
+  border-block-end: 1px solid @control-bg;
+}
+
+.HashtagPage-title {
+  font-size: 28px;
+  line-height: 1.2;
+  margin: 0;
+  word-break: break-word;
+}
+
+// The `#` is set apart so a long hashtag still reads as "# + word" rather than
+// one run-on string.
+.HashtagPage-hash {
+  color: @muted-color;
+  margin-inline-end: 1px;
+}
+
+.HashtagPage-meta {
+  color: @muted-color;
+  margin-block: 6px 0;
+}
+
+.HashtagPage-browse {
+  display: inline-block;
+  margin-block-start: 12px;
+  font-weight: 600;
+}
+
+.HashtagPage-empty,
+.HashtagsPage-empty {
+  color: @muted-color;
+  padding-block: 40px;
+  text-align: center;
+}
+
+// ── Browse page ──────────────────────────────────────────────────────────
+.HashtagsPage-header {
+  background: @control-bg;
+  padding-block: 30px 24px;
+  margin-block-end: 20px;
+}
+
+.HashtagsPage-title {
+  font-size: 28px;
+  margin: 0;
+}
+
+.HashtagsPage-lede {
+  color: @muted-color;
+  margin-block: 6px 0;
+}
+
+.HashtagsPage-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-block-end: 20px;
+}
+
+.HashtagsPage-search {
+  flex: 1 1 220px;
+  max-width: 320px;
+}
+
+.HashtagsPage-sorts {
+  display: flex;
+  gap: 4px;
+
+  .Button.active {
+    color: @primary-color;
+    font-weight: 600;
+  }
+}
+
+.HashtagsPage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+// One chip per hashtag: name and usage count as a single target, so the count
+// is part of the link rather than dead text sitting beside it.
+.HashtagChip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: @control-bg;
+  color: @control-color;
+  text-decoration: none;
+  transition: background 0.1s, color 0.1s;
+
+  &:hover,
+  &:focus {
+    background: fade(@primary-color, 15%);
+    color: @primary-color;
+    text-decoration: none;
+  }
+}
+
+.HashtagChip-name {
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.HashtagChip-count {
+  color: @muted-color;
+  font-size: 12px;
+}
+
+.HashtagChip:hover .HashtagChip-count {
+  color: inherit;
+}
+
+// ── Composer autocomplete ────────────────────────────────────────────────
+// The dropdown is shared with flarum/tags' suggestions, so the `#` glyph sits
+// where a tag badge or avatar would, keeping both kinds of row aligned.
+.HashtagMention-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: 4px;
+  background: @control-bg;
+  color: @muted-color;
+  font-weight: 700;
+}
+
+.HashtagMention-count {
+  color: @muted-color;
+  font-size: 12px;
+  margin-inline-start: 6px;
+}
