@@ -1,5 +1,8 @@
 import app from 'flarum/forum/app';
-import Page from 'flarum/forum/components/Page';
+import Page from 'flarum/common/components/Page';
+import type { IPageAttrs } from 'flarum/common/components/Page';
+import PageStructure from 'flarum/forum/components/PageStructure';
+import IndexSidebar from 'flarum/forum/components/IndexSidebar';
 import Link from 'flarum/common/components/Link';
 import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
 import Button from 'flarum/common/components/Button';
@@ -21,7 +24,7 @@ const SORTS: Record<string, string> = {
  * things: autocomplete while writing (see HashtagMention) and a way to see
  * what already exists. This is the second one.
  */
-export default class HashtagsPage extends Page {
+export default class HashtagsPage<CustomAttrs extends IPageAttrs = IPageAttrs> extends Page<CustomAttrs> {
   hashtags: Hashtag[] = [];
   loading = true;
   sort = 'popular';
@@ -30,7 +33,7 @@ export default class HashtagsPage extends Page {
   /** Guards against an earlier slow response overwriting a later fast one. */
   private requestId = 0;
 
-  oninit(vnode: Mithril.Vnode<any, this>) {
+  oninit(vnode: Mithril.Vnode<CustomAttrs, this>) {
     super.oninit(vnode);
 
     app.setTitle(extractText(app.translator.trans('ernestdefoe-hashtags.forum.browse.title')));
@@ -74,19 +77,30 @@ export default class HashtagsPage extends Page {
 
   view() {
     return (
-      <div className="HashtagsPage">
-        <div className="HashtagsPage-header">
-          <div className="container">
-            <h1 className="HashtagsPage-title">
-              {app.translator.trans('ernestdefoe-hashtags.forum.browse.title')}
-            </h1>
-            <p className="HashtagsPage-lede">
-              {app.translator.trans('ernestdefoe-hashtags.forum.browse.lede')}
-            </p>
-          </div>
-        </div>
+      <PageStructure className="HashtagsPage Page--vertical" hero={this.hero.bind(this)} sidebar={this.sidebar.bind(this)}>
+        {this.content()}
+      </PageStructure>
+    );
+  }
 
+  hero() {
+    return (
+      <div className="Hero HashtagsHero">
         <div className="container">
+          <h1 className="Hero-title">{app.translator.trans('ernestdefoe-hashtags.forum.browse.title')}</h1>
+          <div className="Hero-subtitle">{app.translator.trans('ernestdefoe-hashtags.forum.browse.lede')}</div>
+        </div>
+      </div>
+    );
+  }
+
+  sidebar() {
+    return <IndexSidebar />;
+  }
+
+  content() {
+    return (
+      <div className="HashtagsPage-content">
           <div className="HashtagsPage-controls">
             <input
               className="FormControl HashtagsPage-search"
@@ -135,7 +149,6 @@ export default class HashtagsPage extends Page {
               ))}
             </ul>
           )}
-        </div>
       </div>
     );
   }

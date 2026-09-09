@@ -3,6 +3,7 @@
 use Ernestdefoe\Hashtags\Api\Resource\HashtagResource;
 use Ernestdefoe\Hashtags\Console\ReindexCommand;
 use Ernestdefoe\Hashtags\Formatter\ConfigureHashtags;
+use Ernestdefoe\Hashtags\Listener\RecountHashtagsOnPostDelete;
 use Ernestdefoe\Hashtags\Listener\SyncHashtagsOnPostSave;
 use Ernestdefoe\Hashtags\Model\Hashtag;
 use Ernestdefoe\Hashtags\Search\Filter\HashtagFilter;
@@ -66,10 +67,9 @@ return [
         ->listen(Hidden::class, SyncHashtagsOnPostSave::class)
         ->listen(Restored::class, SyncHashtagsOnPostSave::class)
         /**
-         * Deletion is handled inline, not queued. The FK cascade has already
-         * removed the pivot rows by the time this fires, so the only remaining
-         * record of what the post used is the model still held in the event —
-         * which cannot survive serialisation into a job.
+         * Its own listener class, not a second method on the one above:
+         * Extend\Event::listen() types its listener callable|string, and an
+         * [Class, 'instanceMethod'] array is not callable in PHP.
          */
-        ->listen(Deleted::class, [SyncHashtagsOnPostSave::class, 'handleDeleted']),
+        ->listen(Deleted::class, RecountHashtagsOnPostDelete::class),
 ];

@@ -2,8 +2,10 @@
 
 namespace Ernestdefoe\Hashtags\Formatter;
 
+use Ernestdefoe\Hashtags\Model\Hashtag;
 use Flarum\Http\UrlGenerator;
 use s9e\TextFormatter\Configurator;
+use s9e\TextFormatter\Parser\Tag as FormatterTag;
 
 /**
  * Registers the HASHTAG tag with the s9e/TextFormatter pipeline.
@@ -81,6 +83,30 @@ class ConfigureHashtags
         $tag->attributes->add('name');
 
         /**
+         * The case-folded name, computed at parse time and stored alongside the
+         * display name.
+         *
+         * Without it the href is built from whatever casing the author used, so
+         * `#GameDay` and `#gameday` produce two URLs for one feed — bad for
+         * canonicalisation, and it makes the same hashtag look like two.
+         *
+         * Computed here rather than in XSL because XSLT 1.0's translate() can
+         * only fold character ranges you enumerate by hand, which would quietly
+         * leave `#CAFÉ` half-folded.
+         */
+        $tag->attributes->add('key');
+
+        $tag->filterChain
+            ->prepend([static::class, 'addKey'])
+            /**
+             * The JS twin, for the composer's live preview. toLowerCase() and
+             * mb_strtolower can disagree on a handful of exotic characters, but
+             * the JS value never reaches the database — the server re-parses on
+             * save — so at worst a preview link differs from the saved one.
+             */
+            ->setJS('function(tag) { var n = tag.getAttribute("name"); tag.setAttribute("key", n ? n.toLowerCase() : ""); return true; }');
+
+        /**
          * The hashtag feed route prefix, captured once at compile time. If the
          * forum URL changes the formatter cache must be cleared — same caveat
          * as core's own $TAG_URL and $PROFILE_URL parameters.
@@ -93,11 +119,39 @@ class ConfigureHashtags
          * `#GameDay` renders as `#GameDay` even though it resolves to the same
          * feed as `#gameday`. Casing is the author's; matching is not.
          */
+        /**
+         * The link TEXT re-emits `#` plus the name exactly as it was typed, so
+         * `#GameDay` reads as `#GameDay`. The link TARGET uses the folded key,
+         * so every spelling lands on one canonical URL.
+         *
+         * The choose() is insurance for content parsed by an older version of
+         * this extension, before `key` existed: rather than emitting an empty
+         * href, fall back to the display name, which still resolves because
+         * HashtagResource::find() folds whatever it is given.
+         */
         $tag->template = '
-            <a class="Hashtag" href="{$HASHTAG_URL}{@name}" data-hashtag="{@name}">
+            <a class="Hashtag" data-hashtag="{@key}">
+                <xsl:attribute name="href">
+                    <xsl:value-of select="$HASHTAG_URL"/>
+                    <xsl:choose>
+                        <xsl:when test="string(@key) != \'\'"><xsl:value-of select="@key"/></xsl:when>
+                        <xsl:otherwise><xsl:value-of select="@name"/></xsl:otherwise>
+                    </xsl:choose>
+                </xsl:attribute>
                 <xsl:text>#</xsl:text><xsl:value-of select="@name"/>
             </a>';
 
         $config->Preg->match(self::REGEX, self::TAG);
+    }
+
+    /**
+     * Runs before the built-in filterAttributes, so `key` is populated by the
+     * time the required-attribute check looks for it.
+     */
+    public static function addKey(FormatterTag $tag): bool
+    {
+        $tag->setAttribute('key', Hashtag::key((string) $tag->getAttribute('name')));
+
+        return true;
     }
 }

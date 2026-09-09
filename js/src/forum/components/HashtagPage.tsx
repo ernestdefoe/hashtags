@@ -1,5 +1,8 @@
 import app from 'flarum/forum/app';
-import Page from 'flarum/forum/components/Page';
+import Page from 'flarum/common/components/Page';
+import type { IPageAttrs } from 'flarum/common/components/Page';
+import PageStructure from 'flarum/forum/components/PageStructure';
+import IndexSidebar from 'flarum/forum/components/IndexSidebar';
 import DiscussionList from 'flarum/forum/components/DiscussionList';
 import DiscussionListState from 'flarum/forum/states/DiscussionListState';
 import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
@@ -14,9 +17,12 @@ import type Hashtag from '../models/Hashtag';
  * visibility scoping, pagination and the sort dropdown are core's rather than
  * ours. A hashtag used only in discussions the actor can't see renders the
  * same empty state as one nobody has used.
+ *
+ * Wrapped in PageStructure with the standard IndexSidebar so it reads as part
+ * of the forum rather than a bolted-on page.
  */
-export default class HashtagPage extends Page {
-  /** Case-folded name from the route. */
+export default class HashtagPage<CustomAttrs extends IPageAttrs = IPageAttrs> extends Page<CustomAttrs> {
+  /** Raw name from the route — may be in any casing. */
   name!: string;
 
   /** The hashtag record, for the header counts. `null` once we know there is none. */
@@ -26,7 +32,7 @@ export default class HashtagPage extends Page {
 
   list!: DiscussionListState;
 
-  oninit(vnode: Mithril.Vnode<any, this>) {
+  oninit(vnode: Mithril.Vnode<CustomAttrs, this>) {
     super.oninit(vnode);
 
     this.name = decodeURIComponent(m.route.param('name') || '');
@@ -58,46 +64,62 @@ export default class HashtagPage extends Page {
   }
 
   view() {
+    return (
+      <PageStructure className="HashtagPage Page--vertical" hero={this.hero.bind(this)} sidebar={this.sidebar.bind(this)}>
+        {this.content()}
+      </PageStructure>
+    );
+  }
+
+  hero() {
     // Prefer the stored display casing once we have it, so #gameday and
     // #GameDay both land on a page headed the way it was first written.
     const display = this.hashtag ? this.hashtag.name() : this.name;
 
     return (
-      <div className="HashtagPage">
-        <div className="HashtagPage-header">
-          <div className="container">
-            <h1 className="HashtagPage-title">
-              <span className="HashtagPage-hash">#</span>
-              {display}
-            </h1>
+      <div className="Hero HashtagHero">
+        <div className="container">
+          <h1 className="Hero-title HashtagHero-title">
+            <span className="HashtagHero-hash">#</span>
+            {display}
+          </h1>
 
-            {this.hashtag ? (
-              <p className="HashtagPage-meta">
-                {app.translator.trans('ernestdefoe-hashtags.forum.page.meta', {
+          <div className="Hero-subtitle HashtagHero-subtitle">
+            {this.hashtag
+              ? app.translator.trans('ernestdefoe-hashtags.forum.page.meta', {
                   posts: this.hashtag.postCount(),
                   discussions: this.hashtag.discussionCount(),
-                })}
-              </p>
-            ) : null}
-
-            <Link className="HashtagPage-browse" href={app.route('hashtags')}>
-              {app.translator.trans('ernestdefoe-hashtags.forum.page.browse_all')}
-            </Link>
+                })
+              : null}
           </div>
-        </div>
 
-        <div className="container">
-          {this.loading && this.list.isLoading() ? (
-            <LoadingIndicator />
-          ) : this.list.isEmpty() ? (
-            <p className="HashtagPage-empty">
-              {app.translator.trans('ernestdefoe-hashtags.forum.page.empty', { name: display })}
-            </p>
-          ) : (
-            <DiscussionList state={this.list} />
-          )}
+          <Link className="HashtagHero-browse" href={app.route('hashtags')}>
+            {app.translator.trans('ernestdefoe-hashtags.forum.page.browse_all')}
+          </Link>
         </div>
       </div>
     );
+  }
+
+  sidebar() {
+    return <IndexSidebar />;
+  }
+
+  content() {
+    const display = this.hashtag ? this.hashtag.name() : this.name;
+
+    if (this.list.isLoading()) {
+      return <LoadingIndicator />;
+    }
+
+    if (this.list.isEmpty()) {
+      return (
+        <p className="HashtagPage-empty">
+          {app.translator.trans('ernestdefoe-hashtags.forum.page.empty', { name: display })}
+        </p>
+      );
+    }
+
+    return <DiscussionList state={this.list} />;
   }
 }

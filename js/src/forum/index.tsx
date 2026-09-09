@@ -1,6 +1,6 @@
 import app from 'flarum/forum/app';
 import { extend } from 'flarum/common/extend';
-import IndexPage from 'flarum/forum/components/IndexPage';
+import IndexSidebar from 'flarum/forum/components/IndexSidebar';
 import LinkButton from 'flarum/common/components/LinkButton';
 
 import Hashtag from './models/Hashtag';
@@ -25,10 +25,14 @@ app.initializers.add('ernestdefoe-hashtags', () => {
   }
 
   /**
-   * Discoverability: without an entry point, nobody finds /hashtags. Priority
-   * -10 puts it below the stock nav items rather than above "All Discussions".
+   * Discoverability: without an entry point, nobody finds /hashtags.
+   *
+   * IndexSidebar, not IndexPage — Flarum 2 moved the nav list out of the page
+   * component, and extending IndexPage here adds an item to a list nothing
+   * renders. Priority -10 puts it below the stock items rather than above
+   * "All Discussions".
    */
-  extend(IndexPage.prototype, 'navItems', function (items) {
+  extend(IndexSidebar.prototype, 'navItems', function (items) {
     items.add(
       'hashtags',
       <LinkButton href={app.route('hashtags')} icon="fas fa-hashtag">

@@ -1,83 +1,78 @@
+// Flarum 2 exposes its palette as CSS custom properties, not LESS variables.
+// `@control-bg` and friends do NOT exist here — referencing one is a LESS
+// compile error that takes down the WHOLE forum stylesheet, not just this file,
+// and the forum then renders unstyled with only a line in flarum.log.
+//
+// Using var(--…) is also what makes these styles follow dark mode: the tokens
+// are redefined on the dark theme, so nothing here needs a second ruleset.
+
 // Inline hashtag links inside post content.
 //
 // Deliberately quieter than a TagMention: a tag mention points at a curated
 // part of the forum and earns its colour, whereas a hashtag is a word somebody
 // typed. Making them look identical would imply a structure that isn't there.
 .Hashtag {
-  color: @primary-color;
+  color: var(--link-color);
   font-weight: 600;
   text-decoration: none;
-  border-radius: 4px;
+  border-radius: var(--border-radius);
   padding-inline: 2px;
 
   &:hover,
   &:focus {
-    color: @primary-color;
-    background: fade(@primary-color, 12%);
+    color: var(--link-color);
+    background: var(--control-bg);
     text-decoration: none;
   }
 
   &:focus-visible {
-    outline: 2px solid @primary-color;
+    outline: 2px solid var(--primary-color);
     outline-offset: 1px;
   }
 }
 
-// ── Feed page ────────────────────────────────────────────────────────────
-.HashtagPage-header {
-  background: @control-bg;
-  padding-block: 30px 24px;
-  margin-block-end: 20px;
-  border-block-end: 1px solid @control-bg;
-}
-
-.HashtagPage-title {
-  font-size: 28px;
-  line-height: 1.2;
-  margin: 0;
+// ── Hero (both pages) ────────────────────────────────────────────────────
+// Core's .Hero already carries the background, padding and centring, and a
+// theme may restyle it wholesale. These rules only add what core has no
+// opinion about, so the pages inherit whatever theme is installed instead of
+// fighting it.
+.HashtagHero-title,
+.HashtagsHero .Hero-title {
   word-break: break-word;
 }
 
-// The `#` is set apart so a long hashtag still reads as "# + word" rather than
-// one run-on string.
-.HashtagPage-hash {
-  color: @muted-color;
+// The `#` is set back a little so a long hashtag still reads as "# + word"
+// rather than one run-on string. Opacity rather than a colour token: the hero
+// background is theme-controlled, so a fixed muted colour can land unreadable.
+.HashtagHero-hash {
+  opacity: 0.6;
   margin-inline-end: 1px;
 }
 
-.HashtagPage-meta {
-  color: @muted-color;
-  margin-block: 6px 0;
-}
-
-.HashtagPage-browse {
+.HashtagHero-browse {
   display: inline-block;
-  margin-block-start: 12px;
+  margin-block-start: 8px;
   font-weight: 600;
+  text-decoration: underline;
+  color: inherit;
+
+  &:hover,
+  &:focus {
+    color: inherit;
+    opacity: 0.8;
+  }
 }
 
 .HashtagPage-empty,
 .HashtagsPage-empty {
-  color: @muted-color;
+  color: var(--muted-color);
   padding-block: 40px;
   text-align: center;
 }
 
 // ── Browse page ──────────────────────────────────────────────────────────
-.HashtagsPage-header {
-  background: @control-bg;
-  padding-block: 30px 24px;
-  margin-block-end: 20px;
-}
-
-.HashtagsPage-title {
-  font-size: 28px;
-  margin: 0;
-}
-
-.HashtagsPage-lede {
-  color: @muted-color;
-  margin-block: 6px 0;
+.HashtagsPage-content {
+  padding-block-start: 4px;
 }
 
 .HashtagsPage-controls {
@@ -99,7 +94,7 @@
   gap: 4px;
 
   .Button.active {
-    color: @primary-color;
+    color: var(--primary-color);
     font-weight: 600;
   }
 }
@@ -121,15 +116,15 @@
   gap: 6px;
   padding: 6px 12px;
   border-radius: 999px;
-  background: @control-bg;
-  color: @control-color;
+  background: var(--control-bg);
+  color: var(--control-color);
   text-decoration: none;
   transition: background 0.1s, color 0.1s;
 
   &:hover,
   &:focus {
-    background: fade(@primary-color, 15%);
-    color: @primary-color;
+    background: var(--control-bg-shaded);
+    color: var(--primary-color);
     text-decoration: none;
   }
 }
@@ -140,7 +135,7 @@
 }
 
 .HashtagChip-count {
-  color: @muted-color;
+  color: var(--muted-color);
   font-size: 12px;
 }
 
@@ -157,14 +152,14 @@
   justify-content: center;
   inline-size: 24px;
   block-size: 24px;
-  border-radius: 4px;
-  background: @control-bg;
-  color: @muted-color;
+  border-radius: var(--border-radius);
+  background: var(--control-bg);
+  color: var(--muted-color);
   font-weight: 700;
 }
 
 .HashtagMention-count {
-  color: @muted-color;
+  color: var(--muted-color);
   font-size: 12px;
   margin-inline-start: 6px;
 }

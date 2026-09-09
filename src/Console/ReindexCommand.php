@@ -81,7 +81,13 @@ class ReindexCommand extends AbstractCommand
                 foreach ($posts as $post) {
                     $scanned++;
 
-                    $source = $this->formatter->unparse($post->content, $post);
+                    /**
+                     * `$post->content` is already the unparsed source —
+                     * HasFormattedContent's accessor unparses on read. Calling
+                     * the formatter's unparse() on it again would be a second
+                     * round trip over text that is no longer XML.
+                     */
+                    $source = $post->content;
 
                     if ($source === null || ! preg_match(ConfigureHashtags::REGEX, $source)) {
                         continue;
@@ -92,7 +98,7 @@ class ReindexCommand extends AbstractCommand
                     // Identical XML means the post already had its hashtags
                     // parsed (a re-run, or it was edited after install). Not
                     // writing keeps edited_at and the post row untouched.
-                    if ($reparsed === $post->content) {
+                    if ($reparsed === $post->parsed_content) {
                         continue;
                     }
 
@@ -110,17 +116,22 @@ class ReindexCommand extends AbstractCommand
                      */
                     $post->newQuery()->whereKey($post->id)->update(['content' => $reparsed]);
 
-                    $post->content = $reparsed;
+                    // setParsedContentAttribute, not `->content =`, which would
+                    // send the XML back through the parser a second time.
+                    $post->setParsedContentAttribute($reparsed);
 
                     $this->syncer->sync($post);
                 }
 
-                $this->info("Scanned $scanned posts, updated $changed…");
+                // Braces are load-bearing: PHP identifiers may contain bytes >= 0x80, so
+                // "$changed…" parses as a variable named "changed…" and interpolates
+                // as empty. Reported "updated " with no number until this was braced.
+                $this->info("Scanned {$scanned} posts, updated {$changed}…");
             });
 
         $this->info($dryRun
-            ? "Done. $changed of $scanned posts would gain hashtags."
-            : "Done. $changed of $scanned posts updated.");
+            ? "Done. {$changed} of {$scanned} posts would gain hashtags."
+            : "Done. {$changed} of {$scanned} posts updated.");
 
         return 0;
     }

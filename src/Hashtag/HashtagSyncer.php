@@ -70,7 +70,7 @@ class HashtagSyncer
      */
     public function recountFor(Post $post): void
     {
-        if (! $post instanceof CommentPost || $post->content === null) {
+        if (! $post instanceof CommentPost || $post->parsed_content === null) {
             return;
         }
 
@@ -100,11 +100,22 @@ class HashtagSyncer
             return [];
         }
 
-        if ($post->content === null) {
+        /**
+         * parsed_content, NOT content.
+         *
+         * HasFormattedContent's accessor makes `$post->content` UNPARSE on
+         * read — it hands back the source text the author typed. The XML that
+         * actually holds the HASHTAG elements is `$post->parsed_content`.
+         * Reading `content` here finds no tags and no error: the sync silently
+         * does nothing, forever.
+         */
+        $xml = $post->parsed_content;
+
+        if ($xml === null || $xml === '') {
             return [];
         }
 
-        $names = Utils::getAttributeValues($post->content, ConfigureHashtags::TAG, 'name');
+        $names = Utils::getAttributeValues($xml, ConfigureHashtags::TAG, 'name');
 
         /**
          * Fold to the lookup key and de-duplicate. A post writing
