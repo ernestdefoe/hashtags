@@ -1,0 +1,59 @@
+name: Backend
+
+on: [workflow_dispatch, push, pull_request]
+
+jobs:
+  lint:
+    name: PHP ${{ matrix.php }} lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - name: Validate composer.json
+        run: composer validate
+
+      - name: Lint PHP sources
+        run: find src migrations tests extend.php -name '*.php' -print0 | xargs -0 -n1 -P4 php -l
+
+  # Unit tests only — no database, no booted Flarum.
+  #
+  # Everything asserted here is pure logic, parser output, or SQL rendered
+  # without being executed, so this job needs nothing but `composer install`.
+  # That is the point: a suite that needs a MySQL service is a suite that
+  # quietly stops being run.
+  #
+  # What it does NOT cover, and what still needs a human or a real install:
+  # the queued post-save sync, the API resource, the reindex command's write
+  # path, and anything in the frontend bundles.
+  test:
+    name: PHP ${{ matrix.php }} unit tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: dom, mbstring, xml, xsl
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Run unit tests
+        run: vendor/bin/phpunit --testsuite unit

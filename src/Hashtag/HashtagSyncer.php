@@ -7,6 +7,7 @@ use Ernestdefoe\Hashtags\Model\Hashtag;
 use Flarum\Post\CommentPost;
 use Flarum\Post\Post;
 use Illuminate\Database\Connection;
+use Illuminate\Database\Query\Builder;
 use s9e\TextFormatter\Utils;
 
 /**
@@ -121,6 +122,24 @@ class HashtagSyncer
             return [];
         }
 
+        return self::namesFromXml($xml);
+    }
+
+    /**
+     * Pull the hashtags out of a post's parsed XML, folded and de-duplicated.
+     *
+     * Static and string-in/array-out so the extraction rules can be tested
+     * without a database or a booted Flarum — this is the logic most likely to
+     * drift, and it failed silently the first time it was wrong.
+     *
+     * @return array<string, string> lookup key => display name
+     */
+    public static function namesFromXml(?string $xml): array
+    {
+        if ($xml === null || $xml === '') {
+            return [];
+        }
+
         $names = Utils::getAttributeValues($xml, ConfigureHashtags::TAG, 'name');
 
         /**
@@ -189,6 +208,44 @@ class HashtagSyncer
     }
 
     /**
+     * The aggregate behind recount(), as a query rather than a result.
+     *
+     * 🚨 selectRaw() is passed through VERBATIM — the query builder only
+     * applies the table prefix to identifiers it wraps itself.
+     *
+     * `from`, `join`, `where` and `groupBy` all came out correctly prefixed
+     * while the select list did not, producing "Unknown column
+     * 'post_hashtag.hashtag_id' in 'field list'" on every install configured
+     * with a table prefix. Because this runs from the post-save sync, it did
+     * not just break `hashtags:reindex` — it made POST /api/discussions
+     * return a 500, so nobody could post at all.
+     *
+     * Interpolating getTablePrefix() is what core itself does; see
+     * Flarum\Post\Post::boot(), which builds its post-number expression the
+     * same way. An unprefixed install returns '', so both cases are correct.
+     *
+     * Split out from recount() so a test can assert the generated SQL under a
+     * prefix without needing a database — see tests/unit/TablePrefixTest.
+     *
+     * @param int[] $hashtagIds
+     */
+    public static function recountQuery(Connection $db, array $hashtagIds): Builder
+    {
+        $prefix = $db->getTablePrefix();
+        $pivot = $prefix.'post_hashtag';
+        $posts = $prefix.'posts';
+
+        return $db->table('post_hashtag')
+            ->join('posts', 'posts.id', '=', 'post_hashtag.post_id')
+            ->whereIn('post_hashtag.hashtag_id', $hashtagIds)
+            ->groupBy('post_hashtag.hashtag_id')
+            ->selectRaw($pivot.'.hashtag_id as hashtag_id')
+            ->selectRaw('COUNT(*) as post_count')
+            ->selectRaw('COUNT(DISTINCT '.$pivot.'.discussion_id) as discussion_count')
+            ->selectRaw('MAX('.$posts.'.created_at) as last_used_at');
+    }
+
+    /**
      * Recompute post_count, discussion_count and last_used_at from the pivot
      * for the given hashtags, and delete any that no post uses any more.
      *
@@ -205,34 +262,7 @@ class HashtagSyncer
             return;
         }
 
-        /**
-         * 🚨 selectRaw() is passed through VERBATIM — the query builder only
-         * applies the table prefix to identifiers it wraps itself.
-         *
-         * `from`, `join`, `where` and `groupBy` all came out correctly prefixed
-         * while the select list did not, producing
-         * "Unknown column 'post_hashtag.hashtag_id' in 'field list'" on every
-         * install configured with a table prefix. Because this runs from the
-         * post-save sync, it did not just break `hashtags:reindex` — it made
-         * POST /api/discussions return a 500, so nobody could post at all.
-         *
-         * Interpolating getTablePrefix() is what core itself does; see
-         * Flarum\Post\Post::boot(), which builds its post-number expression
-         * the same way. An unprefixed install returns '' here, so this is
-         * correct in both cases.
-         */
-        $prefix = $this->db->getTablePrefix();
-        $pivot = $prefix.'post_hashtag';
-        $posts = $prefix.'posts';
-
-        $totals = $this->db->table('post_hashtag')
-            ->join('posts', 'posts.id', '=', 'post_hashtag.post_id')
-            ->whereIn('post_hashtag.hashtag_id', $hashtagIds)
-            ->groupBy('post_hashtag.hashtag_id')
-            ->selectRaw($pivot.'.hashtag_id as hashtag_id')
-            ->selectRaw('COUNT(*) as post_count')
-            ->selectRaw('COUNT(DISTINCT '.$pivot.'.discussion_id) as discussion_count')
-            ->selectRaw('MAX('.$posts.'.created_at) as last_used_at')
+        $totals = self::recountQuery($this->db, $hashtagIds)
             ->get()
             ->keyBy('hashtag_id');
 

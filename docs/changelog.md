@@ -2,6 +2,20 @@
 
 All notable changes to **ernestdefoe/hashtags**.
 
+## 2.0.2 — 2026-09-09
+
+### Fixed
+
+- **Posting was broken on any install with a database table prefix.** `POST /api/discussions` returned a 500 with `SQLSTATE[42S22]: Unknown column 'post_hashtag.hashtag_id' in 'field list'`. `selectRaw()` is passed through verbatim — the query builder only prefixes identifiers it wraps itself — so in the counter-recount query the `from`, `join`, `where` and `group by` were correctly prefixed while the select list was not. Because that query runs from the post-save sync, every new post hit it, not just `hashtags:reindex`. Now interpolates `getTablePrefix()` into the raw select expressions, the same way core builds its own post-number expression.
+- Installs **without** a table prefix were never affected by this and are unchanged.
+
+### Notes
+
+- `HashtagSyncer` is typed to the concrete `Connection` now, since `getTablePrefix()` is not declared on `ConnectionInterface`. Flarum binds the interface to that class, so container resolution is unchanged.
+- Every other raw expression in the extension was audited; this was the only one carrying table names. `HashtagFilter`'s subquery and the Eloquent model paths are prefixed by the builder on their own.
+
+No migration needed.
+
 ## 2.0.1 — 2026-09-09
 
 ### Fixed

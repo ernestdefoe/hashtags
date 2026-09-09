@@ -1,0 +1,45 @@
+name: Frontend
+
+on: [workflow_dispatch, push, pull_request]
+
+# 🚨 This job is why 2.0.1 existed.
+#
+# `app.extensionData` is a Flarum 1.x API that does not exist on Flarum 2's
+# AdminApplication. It shipped in 2.0.0, crashed the whole admin bundle, and
+# `tsc` flags it outright — it had simply never been run. Type-checking on
+# every push is the cheapest guard against that entire class of mistake.
+jobs:
+  typecheck:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      # tsconfig points at ../vendor/flarum/core/js/dist-typings, so core has
+      # to be installed before tsc can resolve a single `flarum/…` import.
+      - name: Install PHP dependencies (for core's typings)
+        run: composer install --no-interaction --prefer-dist
+
+      # `npm install`, not `npm ci`: js/package-lock.json is gitignored across
+      # these repos, and ci refuses to run without a committed lockfile.
+      - name: Install JS dependencies
+        run: npm install
+        working-directory: js
+
+      - name: Check typings
+        run: npm run check-typings
+        working-directory: js
+
+      - name: Build
+        run: npm run build
+        working-directory: js
