@@ -106,7 +106,7 @@ composer require ernestdefoe/hashtags
 php flarum cache:clear
 ```
 
-Requires **Flarum 2.0+** and **PHP 8.2+**. `flarum/tags` and `flarum/mentions` are both optional — the extension works without either, and integrates with both when present.
+Requires **Flarum 2.0+** and **PHP 8.3+** (the floor `flarum/core` itself sets). `flarum/tags` and `flarum/mentions` are both optional — the extension works without either, and integrates with both when present.
 
 There is nothing to configure. Hashtags are freeform by design, so there are no settings that wouldn't contradict the post text that created them.
 
