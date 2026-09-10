@@ -101,10 +101,23 @@ hashtag:gameday       discussions using it
 
 ## Installing
 
+Run this **from your Flarum directory** — the one containing `flarum`, `config.php` and `composer.json`:
+
 ```bash
 composer require ernestdefoe/hashtags
 php flarum cache:clear
 ```
+
+To update later, `composer update ernestdefoe/hashtags` from the same place.
+
+<details>
+<summary>“Your requirements could not be resolved… does not match your minimum-stability”</summary>
+
+If the output also says `./composer.json has been created`, Composer was run somewhere that isn't a Flarum install. It made an empty project, which defaults to `minimum-stability: stable`, and Flarum 2 is still published as `rc` — so nothing resolves.
+
+`cd` to your Flarum directory and run it again. A real Flarum root already requires `flarum/core: ^2.0.0-rc.1`, and an explicit pre-release constraint is honoured whatever `minimum-stability` says.
+
+</details>
 
 Requires **Flarum 2.0+** and **PHP 8.3+** (the floor `flarum/core` itself sets). `flarum/tags` and `flarum/mentions` are both optional — the extension works without either, and integrates with both when present.
 
