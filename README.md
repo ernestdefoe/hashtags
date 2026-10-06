@@ -163,6 +163,10 @@ Counters are **recomputed** from the pivot on every sync rather than incremented
 
 The API resource is read-only on purpose. Hashtags come into being by being written in a post and stop existing when the last post using one is edited or deleted — an admin "editing" a hashtag would immediately disagree with the text that produced it.
 
+## Discuss
+
+Questions, ideas and release notes: [Hashtags on discuss.flarum.org](https://discuss.flarum.org/d/39834-hashtags).
+
 ## Licence
 
 [MIT](LICENSE.md) © Ernestdefoe
