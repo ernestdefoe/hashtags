@@ -32,6 +32,18 @@ class FulltextFilter extends AbstractFulltextFilter
         // matches every hashtag and "_" matches any single character.
         $escaped = addcslashes($value, '%_\\');
 
-        $state->getQuery()->where('name_key', 'like', "$escaped%");
+        /**
+         * The ESCAPE clause is spelled out because only MySQL and Postgres
+         * treat a backslash as LIKE's escape character by default. SQLite has
+         * no default, so there `multi\_%` looked for a literal backslash and
+         * typing "#multi_" in the composer found nothing — `_` is a legal
+         * hashtag character, so that is an everyday query, not an edge case.
+         */
+        $query = $state->getQuery();
+
+        $query->whereRaw(
+            $query->getQuery()->getGrammar()->wrap('name_key').' like ? escape ?',
+            ["$escaped%", '\\']
+        );
     }
 }
