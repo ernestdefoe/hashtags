@@ -113,11 +113,7 @@ export default class HashtagPage<CustomAttrs extends IPageAttrs = IPageAttrs> ex
     }
 
     if (this.list.isEmpty()) {
-      return (
-        <p className="HashtagPage-empty">
-          {app.translator.trans('ernestdefoe-hashtags.forum.page.empty', { name: display })}
-        </p>
-      );
+      return <p className="HashtagPage-empty">{app.translator.trans('ernestdefoe-hashtags.forum.page.empty', { name: display })}</p>;
     }
 
     return <DiscussionList state={this.list} />;

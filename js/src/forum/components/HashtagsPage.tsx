@@ -101,54 +101,52 @@ export default class HashtagsPage<CustomAttrs extends IPageAttrs = IPageAttrs> e
   content() {
     return (
       <div className="HashtagsPage-content">
-          <div className="HashtagsPage-controls">
-            <input
-              className="FormControl HashtagsPage-search"
-              type="search"
-              placeholder={extractText(app.translator.trans('ernestdefoe-hashtags.forum.browse.search_placeholder'))}
-              value={this.query}
-              oninput={(e: InputEvent) => {
-                this.query = (e.target as HTMLInputElement).value.trim();
-                this.load();
-              }}
-            />
+        <div className="HashtagsPage-controls">
+          <input
+            className="FormControl HashtagsPage-search"
+            type="search"
+            placeholder={extractText(app.translator.trans('ernestdefoe-hashtags.forum.browse.search_placeholder'))}
+            value={this.query}
+            oninput={(e: InputEvent) => {
+              this.query = (e.target as HTMLInputElement).value.trim();
+              this.load();
+            }}
+          />
 
-            <div className="HashtagsPage-sorts">
-              {Object.keys(SORTS).map((key) => (
-                <Button
-                  className={'Button Button--link' + (this.sort === key ? ' active' : '')}
-                  onclick={() => {
-                    if (this.sort === key) return;
-                    this.sort = key;
-                    this.load();
-                  }}
-                >
-                  {app.translator.trans(`ernestdefoe-hashtags.forum.browse.sort_${key}`)}
-                </Button>
-              ))}
-            </div>
+          <div className="HashtagsPage-sorts">
+            {Object.keys(SORTS).map((key) => (
+              <Button
+                className={'Button Button--link' + (this.sort === key ? ' active' : '')}
+                onclick={() => {
+                  if (this.sort === key) return;
+                  this.sort = key;
+                  this.load();
+                }}
+              >
+                {app.translator.trans(`ernestdefoe-hashtags.forum.browse.sort_${key}`)}
+              </Button>
+            ))}
           </div>
+        </div>
 
-          {this.loading ? (
-            <LoadingIndicator />
-          ) : this.hashtags.length === 0 ? (
-            <p className="HashtagsPage-empty">
-              {app.translator.trans(
-                this.query ? 'ernestdefoe-hashtags.forum.browse.no_matches' : 'ernestdefoe-hashtags.forum.browse.empty'
-              )}
-            </p>
-          ) : (
-            <ul className="HashtagsPage-list">
-              {this.hashtags.map((hashtag) => (
-                <li className="HashtagsPage-item">
-                  <Link className="HashtagChip" href={app.route('hashtag', { name: hashtag.nameKey() })}>
-                    <span className="HashtagChip-name">#{hashtag.name()}</span>
-                    <span className="HashtagChip-count">{hashtag.postCount()}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+        {this.loading ? (
+          <LoadingIndicator />
+        ) : this.hashtags.length === 0 ? (
+          <p className="HashtagsPage-empty">
+            {app.translator.trans(this.query ? 'ernestdefoe-hashtags.forum.browse.no_matches' : 'ernestdefoe-hashtags.forum.browse.empty')}
+          </p>
+        ) : (
+          <ul className="HashtagsPage-list">
+            {this.hashtags.map((hashtag) => (
+              <li className="HashtagsPage-item">
+                <Link className="HashtagChip" href={app.route('hashtag', { name: hashtag.nameKey() })}>
+                  <span className="HashtagChip-name">#{hashtag.name()}</span>
+                  <span className="HashtagChip-count">{hashtag.postCount()}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     );
   }
