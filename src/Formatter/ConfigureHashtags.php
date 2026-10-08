@@ -74,7 +74,9 @@ class ConfigureHashtags
 
     public const REGEX = '/\B#(?<name>[-_\p{L}\p{N}\p{M}]{0,29}\p{L}[-_\p{L}\p{N}\p{M}]{0,29})\b/ui';
 
-    public function __construct(protected UrlGenerator $url) {}
+    public function __construct(protected UrlGenerator $url)
+    {
+    }
 
     public function __invoke(Configurator $config): void
     {

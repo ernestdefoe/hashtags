@@ -22,7 +22,8 @@ class RecountHashtagsOnPostDelete
 {
     public function __construct(
         protected HashtagSyncer $syncer
-    ) {}
+    ) {
+    }
 
     public function handle(Deleted $event): void
     {

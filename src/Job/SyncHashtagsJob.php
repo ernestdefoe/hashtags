@@ -18,7 +18,9 @@ class SyncHashtagsJob implements ShouldQueue
 {
     use InteractsWithQueue;
 
-    public function __construct(protected int $postId) {}
+    public function __construct(protected int $postId)
+    {
+    }
 
     public function handle(HashtagSyncer $syncer): void
     {

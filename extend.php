@@ -20,8 +20,8 @@ use Flarum\Search\Database\DatabaseSearchDriver;
 
 return [
     (new Extend\Frontend('forum'))
-        ->js(__DIR__ . '/js/dist/forum.js')
-        ->css(__DIR__ . '/less/forum.less')
+        ->js(__DIR__.'/js/dist/forum.js')
+        ->css(__DIR__.'/less/forum.less')
         /**
          * Route names matter beyond the frontend: ConfigureHashtags builds the
          * href for every rendered hashtag from `hashtag`, via the UrlGenerator.
@@ -32,9 +32,9 @@ return [
         ->route('/hashtags', 'hashtags'),
 
     (new Extend\Frontend('admin'))
-        ->js(__DIR__ . '/js/dist/admin.js'),
+        ->js(__DIR__.'/js/dist/admin.js'),
 
-    new Extend\Locales(__DIR__ . '/locale'),
+    new Extend\Locales(__DIR__.'/locale'),
 
     (new Extend\Formatter())
         ->configure(ConfigureHashtags::class),

@@ -25,7 +25,9 @@ class HashtagSyncer
      * Flarum binds ConnectionInterface to this class, so nothing changes at
      * the container level.
      */
-    public function __construct(protected Connection $db) {}
+    public function __construct(protected Connection $db)
+    {
+    }
 
     public function sync(Post $post): void
     {
