@@ -16,3 +16,4 @@ Thumbs.db
 
 # PHPUnit run cache
 .phpunit.result.cache
+/tests/integration/tmp
