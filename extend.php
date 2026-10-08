@@ -39,7 +39,7 @@ return [
     (new Extend\Formatter())
         ->configure(ConfigureHashtags::class),
 
-    (new Extend\ApiResource(HashtagResource::class)),
+    new Extend\ApiResource(HashtagResource::class),
 
     (new Extend\SearchDriver(DatabaseSearchDriver::class))
         /** The /hashtag/:name feed, and `hashtag:x` in the search box. */
