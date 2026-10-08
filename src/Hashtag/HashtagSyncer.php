@@ -101,7 +101,7 @@ class HashtagSyncer
      * flagged, so unhiding has to re-sync (see SyncHashtagsOnPostSave, which
      * listens for Restored as well as Posted/Revised).
      */
-    protected function visibleNames(Post $post, bool $ignoreHidden = false): array
+    protected function visibleNames(CommentPost $post, bool $ignoreHidden = false): array
     {
         if (! $ignoreHidden && $post->hidden_at !== null) {
             return [];

@@ -5,6 +5,7 @@ namespace Ernestdefoe\Hashtags\Model;
 use Flarum\Database\AbstractModel;
 use Flarum\Discussion\Discussion;
 use Flarum\Post\Post;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * @property int $id
@@ -47,12 +48,14 @@ class Hashtag extends AbstractModel
         return mb_strtolower(trim($name), 'UTF-8');
     }
 
-    public function posts()
+    /** @return BelongsToMany<Post, $this> */
+    public function posts(): BelongsToMany
     {
         return $this->belongsToMany(Post::class, 'post_hashtag', 'hashtag_id', 'post_id');
     }
 
-    public function discussions()
+    /** @return BelongsToMany<Discussion, $this> */
+    public function discussions(): BelongsToMany
     {
         return $this->belongsToMany(Discussion::class, 'post_hashtag', 'hashtag_id', 'discussion_id');
     }

@@ -3,7 +3,6 @@
 namespace Ernestdefoe\Hashtags\Listener;
 
 use Ernestdefoe\Hashtags\Job\SyncHashtagsJob;
-use Flarum\Post\CommentPost;
 use Flarum\Post\Event\Hidden;
 use Flarum\Post\Event\Posted;
 use Flarum\Post\Event\Restored;
@@ -25,12 +24,6 @@ class SyncHashtagsOnPostSave
 
     public function handle(Posted|Revised|Hidden|Restored $event): void
     {
-        $post = $event->post;
-
-        if (! $post instanceof CommentPost) {
-            return;
-        }
-
-        $this->queue->push(new SyncHashtagsJob((int) $post->id));
+        $this->queue->push(new SyncHashtagsJob((int) $event->post->id));
     }
 }
