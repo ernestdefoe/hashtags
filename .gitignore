@@ -1,8 +1,8 @@
 /vendor
 /js/node_modules
 /js/dist-typings
+/js/coverage-ts
 /composer.lock
-/js/package-lock.json
 /.idea
 /.vscode
 /.claude
