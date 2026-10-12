@@ -4,6 +4,7 @@ namespace Ernestdefoe\Hashtags\Job;
 
 use Ernestdefoe\Hashtags\Hashtag\HashtagSyncer;
 use Flarum\Post\Post;
+use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 
@@ -16,7 +17,9 @@ use Illuminate\Queue\InteractsWithQueue;
  */
 class SyncHashtagsJob implements ShouldQueue
 {
-    use InteractsWithQueue;
+    // Queueable carries $queue, which the queue reads when it pushes the job
+    // (fof/horizon warned "Undefined property ...::$queue" on every push).
+    use Queueable, InteractsWithQueue;
 
     public function __construct(protected int $postId)
     {
