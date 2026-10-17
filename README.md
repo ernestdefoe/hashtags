@@ -136,7 +136,7 @@ php flarum hashtags:reindex             # do it
 
 Only posts that actually contain a hashtag are ever rewritten. The command filters twice before touching anything — first a SQL filter for posts whose stored content contains a `#` at all, then a regex check against the unparsed source — so on a typical forum a low single-digit percentage of posts are written and everything else is read and skipped.
 
-It is idempotent: a second run reports `0 updated`. Use `--chunk` to change the batch size (default 500).
+It also rebuilds the hashtag index from every post with a hashtag — including posts that were parsed but never indexed (written while the queue was down, or imported) — and clears rows left for posts that no longer have one. It is idempotent: a second run reports `0 … re-parsed`. Use `--chunk` to change the batch size (default 500).
 
 ## Permissions and privacy
 
