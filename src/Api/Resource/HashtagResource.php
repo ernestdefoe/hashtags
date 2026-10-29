@@ -46,7 +46,24 @@ class HashtagResource extends AbstractDatabaseResource
             return $this->query($context)->find($id);
         }
 
-        return $this->query($context)->where('name_key', Hashtag::key($id))->first();
+        /**
+         * 🚨 The id arrives PERCENT-ENCODED. Flarum's JSON:API layer hands the
+         * raw path segment through without decoding it, so `#sıradışı` reached
+         * here as `s%C4%B1rad%C4%B1%C5%9F%C4%B1` and matched nothing.
+         *
+         * ASCII hashtags hid this completely: they contain no characters that
+         * need escaping, so the raw segment and the decoded one are the same
+         * string. Only a non-ASCII hashtag shows it, and then only on this
+         * lookup — the feed itself works, because `filter[hashtag]` travels in
+         * the query string, which IS decoded. The page therefore listed the
+         * right posts beside a "not found" alert. Reported by sonsuzus
+         * 2026-10-29.
+         *
+         * rawurldecode is unambiguous here: the pattern that creates hashtags
+         * allows only letters, numbers, marks, `-` and `_`, so a `%` can never
+         * be part of a real name and always means an escape.
+         */
+        return $this->query($context)->where('name_key', Hashtag::key(rawurldecode($id)))->first();
     }
 
     public function endpoints(): array

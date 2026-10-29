@@ -110,14 +110,34 @@ class ReindexCommand extends AbstractCommand
                     $source = $post->content;
                     $matches = $source !== null && preg_match(ConfigureHashtags::REGEX, $source);
 
-                    // No hashtag in the text and no rows to clear: nothing to do.
-                    if (! $matches && ! isset($hasRows[(int) $post->id])) {
+                    /**
+                     * 🚨 The second reason to re-parse, and the one this
+                     * command exists for.
+                     *
+                     * `$matches` asks "does this post's text contain a hashtag
+                     * by TODAY's rules". A post that needs repairing is the
+                     * exact opposite: it holds a HASHTAG element that today's
+                     * rules would NOT produce — stored by an older version, by
+                     * an importer, or left behind when an exclusion was added.
+                     *
+                     * Gating the re-parse on `$matches` alone skipped every
+                     * one of them. After 2.0.7 excluded `#p123`, a reply
+                     * holding a stray `<HASHTAG name="p1233">` stopped
+                     * matching, so its row was cleared while the element
+                     * itself stayed in posts.content for ever: one forum
+                     * reported 1 post re-parsed out of 17,700 and ~1,050
+                     * replies left to fix by hand in SQL.
+                     */
+                    $hasStored = str_contains((string) $post->parsed_content, '<'.ConfigureHashtags::TAG);
+
+                    // Nothing in the text, nothing stored, no rows to clear.
+                    if (! $matches && ! $hasStored && ! isset($hasRows[(int) $post->id])) {
                         continue;
                     }
 
                     $indexed++;
 
-                    if ($matches) {
+                    if (($matches || $hasStored) && $source !== null) {
                         $reparsed = $this->formatter->parse($source, $post, $post->user);
 
                         // Identical XML means the post already had its hashtags

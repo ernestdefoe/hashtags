@@ -29,6 +29,9 @@ class HashtagsApiTest extends TestCase
                 ['id' => 2, 'name' => 'gamenight', 'name_key' => 'gamenight', 'post_count' => 9, 'discussion_count' => 3, 'last_used_at' => Carbon::parse('2026-01-03'), 'created_at' => Carbon::parse('2026-01-01')],
                 ['id' => 3, 'name' => 'multi_word', 'name_key' => 'multi_word', 'post_count' => 1, 'discussion_count' => 1, 'last_used_at' => Carbon::parse('2026-01-01'), 'created_at' => Carbon::parse('2026-01-01')],
                 ['id' => 4, 'name' => 'multiplayer', 'name_key' => 'multiplayer', 'post_count' => 2, 'discussion_count' => 1, 'last_used_at' => Carbon::parse('2026-01-01'), 'created_at' => Carbon::parse('2026-01-01')],
+                // Turkish: dotless ı and ş. Only a non-ASCII name exercises
+                // the percent-encoding of the id — see the test below.
+                ['id' => 5, 'name' => 'Sıradışı', 'name_key' => 'sıradışı', 'post_count' => 3, 'discussion_count' => 1, 'last_used_at' => Carbon::parse('2026-01-04'), 'created_at' => Carbon::parse('2026-01-01')],
             ],
         ]);
     }
@@ -55,7 +58,7 @@ class HashtagsApiTest extends TestCase
             [$status, $body] = $this->get('/api/hashtags', $actor);
 
             $this->assertSame(200, $status);
-            $this->assertSame(['gamenight', 'GameDay', 'multiplayer', 'multi_word'], $this->names($body));
+            $this->assertSame(['gamenight', 'GameDay', 'Sıradışı', 'multiplayer', 'multi_word'], $this->names($body));
         }
     }
 
@@ -128,6 +131,44 @@ class HashtagsApiTest extends TestCase
             $this->assertGreaterThanOrEqual(400, $response->getStatusCode());
         }
 
-        $this->assertSame(['GameDay', 'gamenight', 'multi_word', 'multiplayer'], $this->database()->table('hashtags')->orderBy('id')->pluck('name')->all());
+        $this->assertSame(['GameDay', 'gamenight', 'multi_word', 'multiplayer', 'Sıradışı'], $this->database()->table('hashtags')->orderBy('id')->pluck('name')->all());
+    }
+
+    /**
+     * Regression: a non-ASCII hashtag was 404 on this lookup while its feed
+     * worked, so the page listed the right posts beside a "not found" alert.
+     *
+     * Flarum's JSON:API layer hands the raw path segment to find() without
+     * decoding it. ASCII names hide that completely — they contain nothing
+     * that needs escaping, so raw and decoded are the same string. Reported
+     * by sonsuzus 2026-10-29.
+     */
+    #[Test]
+    public function non_ascii_hashtag_is_found_by_its_percent_encoded_name(): void
+    {
+        [$status, $body] = $this->get('/api/hashtags/'.rawurlencode('sıradışı'));
+
+        $this->assertEquals(200, $status);
+        $this->assertEquals('Sıradışı', $body['data']['attributes']['name']);
+        $this->assertEquals('sıradışı', $body['data']['attributes']['nameKey']);
+    }
+
+    /** The same name unencoded must still resolve, for anything that sends it raw. */
+    #[Test]
+    public function non_ascii_hashtag_is_found_unencoded_too(): void
+    {
+        [$status, $body] = $this->get('/api/hashtags/sıradışı');
+
+        $this->assertEquals(200, $status);
+        $this->assertEquals('Sıradışı', $body['data']['attributes']['name']);
+    }
+
+    /** Case folding still applies to a non-ASCII name. */
+    #[Test]
+    public function non_ascii_hashtag_is_found_by_its_display_casing(): void
+    {
+        [$status] = $this->get('/api/hashtags/'.rawurlencode('Sıradışı'));
+
+        $this->assertEquals(200, $status);
     }
 }
