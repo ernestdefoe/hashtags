@@ -127,6 +127,7 @@ class HashtagPatternTest extends TestCase
             'non-latin' => ['a #日本語 b', '日本語'],
             'start of input' => ['#gameday leads', 'gameday'],
             'trailing punctuation' => ['a #gameday. b', 'gameday'],
+            'group mention suffix is a normal hashtag' => ['a #g45 b', 'g45'],
             'at the length limit' => ['a #'.str_repeat('a', ConfigureHashtags::MAX_LENGTH).' b', str_repeat('a', ConfigureHashtags::MAX_LENGTH)],
         ];
     }
@@ -152,7 +153,92 @@ class HashtagPatternTest extends TestCase
             'markdown link' => ['[x](https://example.com/a#gameday)'],
             'bare hash' => ['a # alone'],
             'over the length limit' => ['a #'.str_repeat('a', ConfigureHashtags::MAX_LENGTH + 20).' b'],
+            // flarum/mentions' own suffixes — see the REGEX docblock.
+            'post mention suffix' => ['a #p1233 b'],
+            'post mention suffix, one digit' => ['a #p1 b'],
+            'post mention suffix, uppercase' => ['a #P1233 b'],
         ];
+    }
+
+    /**
+     * Regression guard for the bug sonsuzus reported on 2026-10-29.
+     *
+     * While the mentioned post exists, POSTMENTION wins on position and we
+     * never see the `#p1233`. Delete the post and core's addPostId leaves the
+     * tag's required attributes unset, so it invalidates — WITHOUT advancing
+     * the parser cursor. HASHTAG was then offered the same text and rendered
+     * `#p1233` as a hashtag in the middle of the reply.
+     *
+     * Both halves are asserted: the mention must still work when the target is
+     * alive, and the text must fall back to plain when it is not.
+     */
+    #[DataProvider('mentionShapes')]
+    public function testADeletedMentionTargetDoesNotBecomeAHashtag(string $text, string $tagName): void
+    {
+        $alive = $this->mentionParser(true)->parse($text);
+        $this->assertStringContainsString('<'.$tagName, $alive, "mention should resolve while the target exists: $alive");
+        $this->assertStringNotContainsString('<HASHTAG', $alive);
+
+        $deleted = $this->mentionParser(false)->parse($text);
+        $this->assertStringNotContainsString('<HASHTAG', $deleted, "deleted target leaked a hashtag: $deleted");
+        $this->assertStringNotContainsString('<'.$tagName, $deleted);
+    }
+
+    public static function mentionShapes(): array
+    {
+        return [
+            'post mention' => ['thanks @"kamildev"#p1233 for that', 'POSTMENTION'],
+        ];
+    }
+
+    /**
+     * Why the exclusion covers `p` and not `g`.
+     *
+     * GROUPMENTION takes both of its required attributes — groupname and id —
+     * straight from the regex, so deleting the group leaves nothing unset and
+     * the tag stays valid. The `#g45` is never offered to us, which is why
+     * excluding it would only cost legitimate hashtags.
+     */
+    public function testADeletedGroupMentionSurvivesSoNoExclusionIsNeeded(): void
+    {
+        $xml = $this->mentionParser(false)->parse('ping @"Moderators"#g45 please');
+
+        $this->assertStringContainsString('<GROUPMENTION', $xml);
+        $this->assertStringNotContainsString('<HASHTAG', $xml);
+    }
+
+    /**
+     * A formatter carrying flarum/mentions' POSTMENTION and GROUPMENTION
+     * alongside ours, with the targets present or absent.
+     */
+    private function mentionParser(bool $targetsExist): Parser
+    {
+        PostMentionPrecedenceHelper::$livePosts = $targetsExist ? [1233] : [];
+        PostMentionPrecedenceHelper::$liveGroups = $targetsExist ? [45] : [];
+
+        $config = new Configurator;
+        $config->Litedown;
+        $config->Autolink;
+
+        $post = $config->tags->add('POSTMENTION');
+        $post->attributes->add('displayname');
+        $post->attributes->add('number')->filterChain->append('#uint');
+        $post->attributes->add('discussionid')->filterChain->append('#uint');
+        $post->attributes->add('id')->filterChain->append('#uint');
+        $post->template = '<a class="PostMention"><xsl:value-of select="@displayname"/></a>';
+        $post->filterChain->prepend([PostMentionPrecedenceHelper::class, 'addPostId']);
+        $config->Preg->match('/\B@["“](?<displayname>((?!"#[a-z]{0,3}[0-9]+).)+)["”]#p(?<id>[0-9]+)\b/', 'POSTMENTION');
+
+        $group = $config->tags->add('GROUPMENTION');
+        $group->attributes->add('groupname');
+        $group->attributes->add('id')->filterChain->append('#uint');
+        $group->template = '<a class="GroupMention"><xsl:value-of select="@groupname"/></a>';
+        $group->filterChain->prepend([PostMentionPrecedenceHelper::class, 'addGroupId']);
+        $config->Preg->match('/\B@["“](?<groupname>((?!"#[a-z]{0,3}[0-9]+).)+)["|”]#g(?<id>[0-9]+)\b/', 'GROUPMENTION');
+
+        (new ConfigureHashtags(new UrlGeneratorStub))($config);
+
+        return $config->finalize()['parser'];
     }
 
     public function testTheCanonicalKeyIsFoldedWhileTheDisplayNameIsNot(): void

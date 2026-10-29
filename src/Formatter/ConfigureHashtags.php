@@ -72,7 +72,37 @@ class ConfigureHashtags
      */
     public const MAX_LENGTH = 59;
 
-    public const REGEX = '/\B#(?<name>[-_\p{L}\p{N}\p{M}]{0,29}\p{L}[-_\p{L}\p{N}\p{M}]{0,29})\b/ui';
+    /**
+     * 🚨 `(?!p[0-9]+\b)` keeps us off flarum/mentions' post-mention suffix.
+     *
+     * A post mention is `@"Name"#p123`. While the target exists that matcher
+     * wins on position and we never see the `#p123`. But POSTMENTION declares
+     * `number` and `discussionid` as REQUIRED, and core's addPostId sets them
+     * only when the post is still there — delete it and the mention
+     * invalidates, which does NOT advance the parser cursor, so HASHTAG was
+     * offered the same text and rendered `#p123` as a hashtag in the middle of
+     * somebody's reply. Reported by sonsuzus on 2026-10-29.
+     *
+     * This is the same fall-through the extension depends on for tag mentions,
+     * firing where it should not — so the fix belongs in the pattern, not in
+     * precedence, which must stay positional.
+     *
+     * Deliberately ONLY `p`, because post mentions are the only shape at risk:
+     *
+     *  - group mentions (`#g45`) take `groupname` and `id` straight from the
+     *    regex, so a deleted group leaves no required attribute unset and the
+     *    tag never invalidates. Excluding `#g` would cost real hashtags (`#g2`)
+     *    to fix nothing — there is a test holding that line.
+     *  - user mentions (`@"Name"#123`) are digits alone, which already fail the
+     *    "at least one letter" requirement below.
+     *
+     * Scoped tightly, so real hashtags are untouched: `#playbook`, `#pixel2`,
+     * `#p1233a` and `#p` all still match. The `/i` flag means `#P123` is
+     * excluded too — core only recognises lowercase there, so that is a
+     * hair's-breadth over-exclusion, not worth a case-sensitive group the JS
+     * regexp convertor may not support.
+     */
+    public const REGEX = '/\B#(?!p[0-9]+\b)(?<name>[-_\p{L}\p{N}\p{M}]{0,29}\p{L}[-_\p{L}\p{N}\p{M}]{0,29})\b/ui';
 
     public function __construct(protected UrlGenerator $url)
     {
