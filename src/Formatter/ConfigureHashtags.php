@@ -73,36 +73,44 @@ class ConfigureHashtags
     public const MAX_LENGTH = 59;
 
     /**
-     * 🚨 `(?!p[0-9]+\b)` keeps us off flarum/mentions' post-mention suffix.
+     * 🚨 `(?![pg][0-9]+\b)` keeps us off flarum/mentions' own suffixes.
      *
-     * A post mention is `@"Name"#p123`. While the target exists that matcher
-     * wins on position and we never see the `#p123`. But POSTMENTION declares
-     * `number` and `discussionid` as REQUIRED, and core's addPostId sets them
-     * only when the post is still there — delete it and the mention
-     * invalidates, which does NOT advance the parser cursor, so HASHTAG was
-     * offered the same text and rendered `#p123` as a hashtag in the middle of
-     * somebody's reply. Reported by sonsuzus on 2026-10-29.
+     * Post mentions are `@"Name"#p123` and group mentions `@"Name"#g45`. While
+     * those matchers resolve they win on position and we never see the suffix.
+     * When they DON'T resolve they invalidate — and an invalidated tag does not
+     * advance the parser cursor, so HASHTAG is offered the same text and turns
+     * the suffix into a hashtag mid-sentence. Reported by sonsuzus 2026-10-29.
      *
      * This is the same fall-through the extension depends on for tag mentions,
-     * firing where it should not — so the fix belongs in the pattern, not in
-     * precedence, which must stay positional.
+     * firing where it must not, so the fix belongs in the pattern and not in
+     * precedence — which has to stay positional or nothing else works.
      *
-     * Deliberately ONLY `p`, because post mentions are the only shape at risk:
+     * Both shapes fail in normal use, by different routes:
      *
-     *  - group mentions (`#g45`) take `groupname` and `id` straight from the
-     *    regex, so a deleted group leaves no required attribute unset and the
-     *    tag never invalidates. Excluding `#g` would cost real hashtags (`#g2`)
-     *    to fix nothing — there is a test holding that line.
-     *  - user mentions (`@"Name"#123`) are digits alone, which already fail the
-     *    "at least one letter" requirement below.
+     *  - POSTMENTION declares `number` and `discussionid` REQUIRED and core's
+     *    addPostId sets them only while the post exists, so deleting the post
+     *    invalidates the mention via the required-attribute check.
+     *  - addGroupId calls `$tag->invalidate()` OUTRIGHT, in two places: when
+     *    the group is gone, and when the actor cannot `mentionGroups` or the
+     *    group is GUEST/MEMBER. That second branch does not need anything
+     *    deleted — an ordinary member without the permission is enough.
      *
-     * Scoped tightly, so real hashtags are untouched: `#playbook`, `#pixel2`,
-     * `#p1233a` and `#p` all still match. The `/i` flag means `#P123` is
-     * excluded too — core only recognises lowercase there, so that is a
-     * hair's-breadth over-exclusion, not worth a case-sensitive group the JS
-     * regexp convertor may not support.
+     * 🚨 Do not "narrow" this to `p` by reasoning about which attributes come
+     * from the regex. I did exactly that, from a test stub that returned null
+     * like addPostId instead of invalidating like addGroupId, and shipped 2.0.6
+     * still broken for `#g`. Only the live formatter caught it.
+     *
+     * User mentions (`@"Name"#123`) need no exclusion: digits alone already
+     * fail the "at least one letter" requirement below.
+     *
+     * The cost is `#g2`/`#p1`-shaped hashtags, which is the right trade against
+     * a mention breaking in readable text. Everything else is untouched:
+     * `#playbook`, `#pixel2`, `#g2a`, `#p1233a` and `#p` all still match. The
+     * `/i` flag also excludes `#P123`; core only recognises lowercase there, so
+     * that is a hair's-breadth over-exclusion and not worth a case-sensitive
+     * group the JS regexp convertor may not support.
      */
-    public const REGEX = '/\B#(?!p[0-9]+\b)(?<name>[-_\p{L}\p{N}\p{M}]{0,29}\p{L}[-_\p{L}\p{N}\p{M}]{0,29})\b/ui';
+    public const REGEX = '/\B#(?![pg][0-9]+\b)(?<name>[-_\p{L}\p{N}\p{M}]{0,29}\p{L}[-_\p{L}\p{N}\p{M}]{0,29})\b/ui';
 
     public function __construct(protected UrlGenerator $url)
     {

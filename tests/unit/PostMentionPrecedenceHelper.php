@@ -34,6 +34,15 @@ class PostMentionPrecedenceHelper
         return null;
     }
 
+    /**
+     * 🚨 addGroupId INVALIDATES; it does not merely return null like addPostId.
+     *
+     * Getting this wrong is what let 2.0.6 ship still broken for `#g`: the stub
+     * returned null, the required `groupname` was already set by the regex, so
+     * the tag stayed valid and the test reported a safety that core does not
+     * actually provide. Core invalidates both when the group is missing and
+     * when the actor cannot mentionGroups.
+     */
     public static function addGroupId(FormatterTag $tag): ?bool
     {
         if (in_array((int) $tag->getAttribute('id'), self::$liveGroups, true)) {
@@ -41,6 +50,8 @@ class PostMentionPrecedenceHelper
 
             return true;
         }
+
+        $tag->invalidate();
 
         return null;
     }

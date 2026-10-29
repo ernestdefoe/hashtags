@@ -127,7 +127,6 @@ class HashtagPatternTest extends TestCase
             'non-latin' => ['a #日本語 b', '日本語'],
             'start of input' => ['#gameday leads', 'gameday'],
             'trailing punctuation' => ['a #gameday. b', 'gameday'],
-            'group mention suffix is a normal hashtag' => ['a #g45 b', 'g45'],
             'at the length limit' => ['a #'.str_repeat('a', ConfigureHashtags::MAX_LENGTH).' b', str_repeat('a', ConfigureHashtags::MAX_LENGTH)],
         ];
     }
@@ -157,6 +156,8 @@ class HashtagPatternTest extends TestCase
             'post mention suffix' => ['a #p1233 b'],
             'post mention suffix, one digit' => ['a #p1 b'],
             'post mention suffix, uppercase' => ['a #P1233 b'],
+            'group mention suffix' => ['a #g45 b'],
+            'group mention suffix, one digit' => ['a #g5 b'],
         ];
     }
 
@@ -187,25 +188,12 @@ class HashtagPatternTest extends TestCase
     public static function mentionShapes(): array
     {
         return [
-            'post mention' => ['thanks @"kamildev"#p1233 for that', 'POSTMENTION'],
+            'post mention'  => ['thanks @"kamildev"#p1233 for that', 'POSTMENTION'],
+            'group mention' => ['ping @"Moderators"#g45 please', 'GROUPMENTION'],
         ];
     }
 
-    /**
-     * Why the exclusion covers `p` and not `g`.
-     *
-     * GROUPMENTION takes both of its required attributes — groupname and id —
-     * straight from the regex, so deleting the group leaves nothing unset and
-     * the tag stays valid. The `#g45` is never offered to us, which is why
-     * excluding it would only cost legitimate hashtags.
-     */
-    public function testADeletedGroupMentionSurvivesSoNoExclusionIsNeeded(): void
-    {
-        $xml = $this->mentionParser(false)->parse('ping @"Moderators"#g45 please');
 
-        $this->assertStringContainsString('<GROUPMENTION', $xml);
-        $this->assertStringNotContainsString('<HASHTAG', $xml);
-    }
 
     /**
      * A formatter carrying flarum/mentions' POSTMENTION and GROUPMENTION
