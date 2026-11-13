@@ -9,6 +9,7 @@ use Ernestdefoe\Hashtags\Model\Hashtag;
 use Ernestdefoe\Hashtags\Search\Filter\HashtagFilter;
 use Ernestdefoe\Hashtags\Search\FulltextFilter;
 use Ernestdefoe\Hashtags\Search\HashtagSearcher;
+use Ernestdefoe\Hashtags\Settings\PerPage;
 use Flarum\Discussion\Search\DiscussionSearcher;
 use Flarum\Extend;
 use Flarum\Post\Event\Deleted;
@@ -40,6 +41,15 @@ return [
         ->configure(ConfigureHashtags::class),
 
     new Extend\ApiResource(HashtagResource::class),
+
+    /**
+     * String-literal key, not PerPage::KEY: extend.php runs on every boot, and
+     * reading the class at load time fatals every request while a deploy is
+     * mid-way through updating the autoloader. Inside the closure it's fine.
+     */
+    (new Extend\Settings())
+        ->default('ernestdefoe-hashtags.per_page', 60)
+        ->serializeToForum('hashtagsPerPage', 'ernestdefoe-hashtags.per_page', fn ($value) => PerPage::clamp($value)),
 
     (new Extend\SearchDriver(DatabaseSearchDriver::class))
         /** The /hashtag/:name feed, and `hashtag:x` in the search box. */

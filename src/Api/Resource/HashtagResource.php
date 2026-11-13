@@ -3,6 +3,7 @@
 namespace Ernestdefoe\Hashtags\Api\Resource;
 
 use Ernestdefoe\Hashtags\Model\Hashtag;
+use Ernestdefoe\Hashtags\Settings\PerPage;
 use Flarum\Api\Endpoint;
 use Flarum\Api\Resource\AbstractDatabaseResource;
 use Flarum\Api\Schema;
@@ -72,7 +73,8 @@ class HashtagResource extends AbstractDatabaseResource
             Endpoint\Show::make(),
             Endpoint\Index::make()
                 ->defaultSort('-postCount')
-                ->paginate(),
+                /** Raised from core's 50 so the browse page's setting can reach PerPage::MAX. */
+                ->paginate(20, PerPage::MAX),
         ];
     }
 

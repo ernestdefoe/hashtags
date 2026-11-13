@@ -121,7 +121,7 @@ If the output also says `./composer.json has been created`, Composer was run som
 
 Requires **Flarum 2.0+** and **PHP 8.3+** (the floor `flarum/core` itself sets). `flarum/tags` and `flarum/mentions` are both optional — the extension works without either, and integrates with both when present.
 
-There is nothing to configure. Hashtags are freeform by design, so there are no settings that wouldn't contradict the post text that created them.
+Hashtags themselves have nothing to configure: they're freeform by design, so any setting about them would contradict the post text that created them. The one setting is **Hashtags shown per page** (admin → Hashtags), how many the `/hashtags` page lists: 60 by default, anything from 1 to 100.
 
 ## Installing on a forum that already has posts
 

@@ -48,7 +48,8 @@ export default class HashtagsPage<CustomAttrs extends IPageAttrs = IPageAttrs> e
 
     const params: Record<string, any> = {
       sort: SORTS[this.sort],
-      page: { limit: 60 },
+      // Admin setting, already clamped to the API's page cap by the server.
+      page: { limit: app.forum.attribute<number>('hashtagsPerPage') || 60 },
     };
 
     if (this.query) params.filter = { q: this.query };
