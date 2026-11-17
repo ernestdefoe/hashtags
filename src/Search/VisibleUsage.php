@@ -20,8 +20,8 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
  * the discussion's visibility too, so tags, byobu and approval all apply).
  * The inner join drops a hashtag with no visible use.
  *
- * The stored columns stay: the syncer still uses them to delete hashtags
- * nobody uses any more.
+ * The syncer still writes the stored columns (from all use) and deletes a
+ * hashtag whose pivot rows are gone; the API no longer serves them.
  */
 class VisibleUsage
 {

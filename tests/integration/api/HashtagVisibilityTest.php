@@ -132,4 +132,21 @@ class HashtagVisibilityTest extends TestCase
 
         $this->assertSame(['public'], $names);
     }
+
+    #[Test]
+    public function a_feed_skips_a_discussion_whose_only_use_is_a_post_the_actor_cannot_see()
+    {
+        // Discussion 1 is public, but #private there is only in post 4, a private post.
+        foreach ([null, 2, 1] as $actor) {
+            $response = $this->send(
+                $this->request('GET', '/api/discussions', $actor ? ['authenticatedAs' => $actor] : [])
+                    ->withQueryParams(['filter' => ['hashtag' => 'private']])
+            );
+
+            $this->assertSame([], json_decode((string) $response->getBody(), true)['data']);
+        }
+
+        $response = $this->send($this->request('GET', '/api/discussions')->withQueryParams(['filter' => ['hashtag' => 'public']]));
+        $this->assertSame(['1'], array_column(json_decode((string) $response->getBody(), true)['data'], 'id'));
+    }
 }

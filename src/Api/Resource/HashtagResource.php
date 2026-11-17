@@ -36,8 +36,9 @@ class HashtagResource extends AbstractDatabaseResource
     }
 
     /**
-     * The same scope as the list (see VisibleUsage), so /api/hashtags/{name}
-     * neither confirms a hidden hashtag nor reveals its full counts.
+     * The same scope as the list (see VisibleUsage), for any query built from
+     * this resource. Show doesn't go through here: find() below applies it to
+     * the one hashtag it resolves.
      */
     public function scope(Builder $query, Context $context): void
     {
