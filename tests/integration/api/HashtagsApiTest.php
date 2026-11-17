@@ -3,6 +3,7 @@
 namespace Ernestdefoe\Hashtags\Tests\integration\api;
 
 use Carbon\Carbon;
+use Ernestdefoe\Hashtags\Tests\integration\SeedsHashtagUse;
 use Flarum\Testing\integration\RetrievesAuthorizedUsers;
 use Flarum\Testing\integration\TestCase;
 use Flarum\User\User;
@@ -15,6 +16,7 @@ use PHPUnit\Framework\Attributes\Test;
 class HashtagsApiTest extends TestCase
 {
     use RetrievesAuthorizedUsers;
+    use SeedsHashtagUse;
 
     protected function setUp(): void
     {
@@ -24,16 +26,15 @@ class HashtagsApiTest extends TestCase
 
         $this->prepareDatabase([
             User::class => [$this->normalUser()],
-            'hashtags' => [
-                ['id' => 1, 'name' => 'GameDay', 'name_key' => 'gameday', 'post_count' => 5, 'discussion_count' => 2, 'last_used_at' => Carbon::parse('2026-01-02'), 'created_at' => Carbon::parse('2026-01-01')],
-                ['id' => 2, 'name' => 'gamenight', 'name_key' => 'gamenight', 'post_count' => 9, 'discussion_count' => 3, 'last_used_at' => Carbon::parse('2026-01-03'), 'created_at' => Carbon::parse('2026-01-01')],
-                ['id' => 3, 'name' => 'multi_word', 'name_key' => 'multi_word', 'post_count' => 1, 'discussion_count' => 1, 'last_used_at' => Carbon::parse('2026-01-01'), 'created_at' => Carbon::parse('2026-01-01')],
-                ['id' => 4, 'name' => 'multiplayer', 'name_key' => 'multiplayer', 'post_count' => 2, 'discussion_count' => 1, 'last_used_at' => Carbon::parse('2026-01-01'), 'created_at' => Carbon::parse('2026-01-01')],
-                // Turkish: dotless ı and ş. Only a non-ASCII name exercises
-                // the percent-encoding of the id — see the test below.
-                ['id' => 5, 'name' => 'Sıradışı', 'name_key' => 'sıradışı', 'post_count' => 3, 'discussion_count' => 1, 'last_used_at' => Carbon::parse('2026-01-04'), 'created_at' => Carbon::parse('2026-01-01')],
-            ],
-        ]);
+        ] + $this->hashtagUse([
+            ['id' => 1, 'name' => 'GameDay', 'name_key' => 'gameday', 'post_count' => 5, 'discussion_count' => 2, 'last_used_at' => Carbon::parse('2026-01-02'), 'created_at' => Carbon::parse('2026-01-01')],
+            ['id' => 2, 'name' => 'gamenight', 'name_key' => 'gamenight', 'post_count' => 9, 'discussion_count' => 3, 'last_used_at' => Carbon::parse('2026-01-03'), 'created_at' => Carbon::parse('2026-01-01')],
+            ['id' => 3, 'name' => 'multi_word', 'name_key' => 'multi_word', 'post_count' => 1, 'discussion_count' => 1, 'last_used_at' => Carbon::parse('2026-01-01'), 'created_at' => Carbon::parse('2026-01-01')],
+            ['id' => 4, 'name' => 'multiplayer', 'name_key' => 'multiplayer', 'post_count' => 2, 'discussion_count' => 1, 'last_used_at' => Carbon::parse('2026-01-01'), 'created_at' => Carbon::parse('2026-01-01')],
+            // Turkish: dotless ı and ş. Only a non-ASCII name exercises
+            // the percent-encoding of the id — see the test below.
+            ['id' => 5, 'name' => 'Sıradışı', 'name_key' => 'sıradışı', 'post_count' => 3, 'discussion_count' => 1, 'last_used_at' => Carbon::parse('2026-01-04'), 'created_at' => Carbon::parse('2026-01-01')],
+        ]));
     }
 
     private function get(string $path, ?int $actor = null, array $query = []): array

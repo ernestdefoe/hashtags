@@ -3,11 +3,13 @@
 namespace Ernestdefoe\Hashtags\Api\Resource;
 
 use Ernestdefoe\Hashtags\Model\Hashtag;
+use Ernestdefoe\Hashtags\Search\VisibleUsage;
 use Ernestdefoe\Hashtags\Settings\PerPage;
 use Flarum\Api\Endpoint;
 use Flarum\Api\Resource\AbstractDatabaseResource;
 use Flarum\Api\Schema;
 use Flarum\Api\Sort\SortColumn;
+use Illuminate\Database\Eloquent\Builder;
 use Tobyz\JsonApiServer\Context;
 
 /**
@@ -34,6 +36,15 @@ class HashtagResource extends AbstractDatabaseResource
     }
 
     /**
+     * The same scope as the list (see VisibleUsage), so /api/hashtags/{name}
+     * neither confirms a hidden hashtag nor reveals its full counts.
+     */
+    public function scope(Builder $query, Context $context): void
+    {
+        VisibleUsage::apply($query, $context->getActor());
+    }
+
+    /**
      * Accept either the numeric id or the hashtag itself, so the feed page can
      * do `app.store.find('hashtags', 'gameday')` straight from the route
      * parameter without a lookup round-trip first.
@@ -43,12 +54,8 @@ class HashtagResource extends AbstractDatabaseResource
      */
     public function find(string $id, Context $context): ?object
     {
-        if (is_numeric($id)) {
-            return $this->query($context)->find($id);
-        }
-
         /**
-         * 🚨 The id arrives PERCENT-ENCODED. Flarum's JSON:API layer hands the
+         * 🚨 A name arrives PERCENT-ENCODED. Flarum's JSON:API layer hands the
          * raw path segment through without decoding it, so `#sıradışı` reached
          * here as `s%C4%B1rad%C4%B1%C5%9F%C4%B1` and matched nothing.
          *
@@ -64,7 +71,39 @@ class HashtagResource extends AbstractDatabaseResource
          * allows only letters, numbers, marks, `-` and `_`, so a `%` can never
          * be part of a real name and always means an escape.
          */
-        return $this->query($context)->where('name_key', Hashtag::key(rawurldecode($id)))->first();
+        $hashtagId = Hashtag::query()
+            ->when(
+                is_numeric($id),
+                fn (Builder $query) => $query->whereKey((int) $id),
+                fn (Builder $query) => $query->where('name_key', Hashtag::key(rawurldecode($id)))
+            )
+            ->value('id');
+
+        if ($hashtagId === null) {
+            return null;
+        }
+
+        /**
+         * Count this one hashtag's visible use, not every hashtag's: scope()
+         * aggregates them all, which a single lookup doesn't need.
+         */
+        $query = Hashtag::query()->whereKey($hashtagId);
+
+        VisibleUsage::apply($query, $context->getActor(), [(int) $hashtagId]);
+
+        return $query->first();
+    }
+
+    /**
+     * No `meta.page.total`. Counting visible hashtags re-runs the whole
+     * visible-use aggregate (VisibleUsage) a second time, which doubled the
+     * cost of the list, and nothing reads the total: the browse page shows
+     * one page and autocomplete a handful. Pagination still gets a `next`
+     * link from a full page.
+     */
+    public function count(object $query, Context $context): ?int
+    {
+        return null;
     }
 
     public function endpoints(): array

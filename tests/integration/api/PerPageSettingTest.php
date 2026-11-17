@@ -3,6 +3,7 @@
 namespace Ernestdefoe\Hashtags\Tests\integration\api;
 
 use Carbon\Carbon;
+use Ernestdefoe\Hashtags\Tests\integration\SeedsHashtagUse;
 use Flarum\Testing\integration\TestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -13,6 +14,8 @@ use PHPUnit\Framework\Attributes\Test;
  */
 class PerPageSettingTest extends TestCase
 {
+    use SeedsHashtagUse;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -68,7 +71,7 @@ class PerPageSettingTest extends TestCase
         for ($i = 1; $i <= 110; $i++) {
             $rows[] = ['id' => $i, 'name' => "tag$i", 'name_key' => "tag$i", 'post_count' => 1, 'discussion_count' => 1, 'last_used_at' => Carbon::parse('2026-01-01'), 'created_at' => Carbon::parse('2026-01-01')];
         }
-        $this->prepareDatabase(['hashtags' => $rows]);
+        $this->prepareDatabase($this->hashtagUse($rows));
 
         $count = fn (string $limit) => count(json_decode((string) $this->send(
             $this->request('GET', '/api/hashtags')->withQueryParams(['page' => ['limit' => $limit]])

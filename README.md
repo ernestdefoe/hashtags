@@ -140,7 +140,7 @@ It also rebuilds the hashtag index from every post with a hashtag — including 
 
 ## Permissions and privacy
 
-Hashtag **rows** are visible to everyone — a hashtag is a word, not content. What a hashtag *leads to* is scoped per actor by Flarum's own discussion search, so a hashtag used only in a private discussion appears in the list but its feed comes back empty for anyone who can't see the discussion.
+The hashtag list and its counts follow what each reader can see. A hashtag is listed only if it's used in at least one post the reader can see, and its post count, discussion count and last-used date count only those posts. A hashtag used only in a hidden, private or restricted-tag discussion doesn't appear for anyone who can't see that discussion, and `/api/hashtags/{name}` answers 404 for it. Each feed is a normal discussion search, so it's scoped the same way.
 
 That is a deliberate trade: it reveals that a word has been used somewhere, never a discussion, a title or an author. If your forum needs the stricter behaviour, the place to change it is `HashtagSearcher::getQuery()`.
 
