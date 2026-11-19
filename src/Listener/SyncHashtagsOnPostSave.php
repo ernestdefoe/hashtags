@@ -13,8 +13,9 @@ use Illuminate\Contracts\Queue\Queue;
  * Keeps `post_hashtag` in step with what posts actually say.
  *
  * Posted/Revised/Hidden/Restored go through the queue — a post with twenty
- * hashtags should not add twenty round-trips to the save request. Deletion is
- * handled separately and inline; see RecountHashtagsOnPostDelete.
+ * hashtags should not add twenty round-trips to the save request. Deleted needs
+ * no listener: the foreign-key cascade removes a deleted post's rows, and
+ * counts are read live from the posts the reader can see.
  */
 class SyncHashtagsOnPostSave
 {

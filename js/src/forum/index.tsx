@@ -3,25 +3,28 @@ import { extend } from 'flarum/common/extend';
 import IndexSidebar from 'flarum/forum/components/IndexSidebar';
 import LinkButton from 'flarum/common/components/LinkButton';
 
-import Hashtag from './models/Hashtag';
-import HashtagPage from './components/HashtagPage';
-import HashtagsPage from './components/HashtagsPage';
-import registerMentionable from './registerMentionable';
+export { default as extend } from './extend';
 
 app.initializers.add('ernestdefoe-hashtags', () => {
-  app.store.models.hashtags = Hashtag;
-
-  app.routes.hashtag = { path: '/hashtag/:name', component: HashtagPage };
-  app.routes.hashtags = { path: '/hashtags', component: HashtagsPage };
-
   /**
    * Composer autocomplete. Guarded rather than required: hashtags parse, link
    * and browse perfectly well without flarum/mentions — you just lose the
-   * suggestions while typing. The import lives behind this check because
-   * `ext:flarum/mentions/…` does not resolve when mentions isn't installed.
+   * suggestions while typing.
+   *
+   * 🚨 A dynamic import, never a static one. The module extends a class from
+   * `ext:flarum/mentions/…`, and a static import evaluates that `extends`
+   * when the bundle loads, before this check runs: without mentions it threw
+   * "Class extends value undefined", and because core concatenates every
+   * extension into one script, it stopped every extension after this one too.
+   * As its own chunk it is only fetched and evaluated once mentions is known
+   * to be there.
    */
   if ('flarum-mentions' in flarum.extensions) {
-    registerMentionable();
+    // beforeMount, not straight away: the chunk loader reads app.forum for the
+    // asset URL, and that isn't set while initializers run.
+    app.beforeMount(() => {
+      import('./registerMentionable').then(({ default: registerMentionable }) => registerMentionable());
+    });
   }
 
   /**

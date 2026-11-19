@@ -46,14 +46,17 @@ class ReindexCommandTest extends ConsoleTestCase
         $this->assertStringContainsString('<HASHTAG', $db->table('posts')->where('id', 1)->value('content'));
 
         // A row left over for a post that no longer says #stale.
-        $db->table('hashtags')->insert(['id' => 99, 'name' => 'stale', 'name_key' => 'stale', 'post_count' => 1, 'discussion_count' => 1]);
+        $db->table('hashtags')->insert(['id' => 99, 'name' => 'stale', 'name_key' => 'stale']);
         $db->table('post_hashtag')->insert(['post_id' => 3, 'hashtag_id' => 99, 'discussion_id' => 1]);
 
         $output = $this->runCommand(['command' => 'hashtags:reindex']);
 
         $this->assertSame(
             ['gameday' => 2, 'legacy' => 1, 'tailgate' => 1],
-            $db->table('hashtags')->orderBy('name_key')->pluck('post_count', 'name_key')->map(fn ($n) => (int) $n)->all()
+            $db->table('hashtags')->orderBy('name_key')->get()
+                ->mapWithKeys(fn ($row) => [$row->name_key => $db->table('post_hashtag')->where('hashtag_id', $row->id)->count()])
+                ->filter()
+                ->all()
         );
         $this->assertSame(0, $db->table('post_hashtag')->where('post_id', 3)->count());
         $this->assertSame(4, $db->table('post_hashtag')->count());
@@ -91,7 +94,7 @@ class ReindexCommandTest extends ConsoleTestCase
         ]);
 
         $id = $db->table('hashtags')->insertGetId([
-            'name' => 'p1233', 'name_key' => 'p1233', 'post_count' => 1, 'discussion_count' => 1, 'created_at' => Carbon::now(),
+            'name' => 'p1233', 'name_key' => 'p1233', 'created_at' => Carbon::now(),
         ]);
         $db->table('post_hashtag')->insert(['post_id' => 10, 'hashtag_id' => $id, 'discussion_id' => 1]);
 
@@ -101,6 +104,7 @@ class ReindexCommandTest extends ConsoleTestCase
 
         $this->assertStringNotContainsString('<HASHTAG', $content, 'the stray element must be rewritten out of the post');
         $this->assertStringContainsString('#p1233', $content, 'the text itself must survive as plain text');
-        $this->assertNull($db->table('hashtags')->where('name_key', 'p1233')->first(), 'the stray hashtag must leave the list');
+        $this->assertSame(0, $db->table('post_hashtag')->where('hashtag_id', $id)->count(), 'the stray hashtag must lose its row');
+        $this->assertSame(404, $this->send($this->request('GET', '/api/hashtags/p1233'))->getStatusCode(), 'and leave the list');
     }
 }

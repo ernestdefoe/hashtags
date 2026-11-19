@@ -35,7 +35,8 @@ export default class HashtagPage<CustomAttrs extends IPageAttrs = IPageAttrs> ex
   oninit(vnode: Mithril.Vnode<CustomAttrs, this>) {
     super.oninit(vnode);
 
-    this.name = decodeURIComponent(m.route.param('name') || '');
+    // Mithril has already decoded the route parameter; decoding again threw on `%`.
+    this.name = m.route.param('name') || '';
 
     this.list = new DiscussionListState({ filter: { hashtag: this.name } });
     this.list.refresh();

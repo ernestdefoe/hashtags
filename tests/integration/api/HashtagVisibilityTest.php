@@ -51,10 +51,9 @@ class HashtagVisibilityTest extends TestCase
                 $post(5, 1),
             ],
             'hashtags' => [
-                // Stored totals count every use, private included.
-                ['id' => 1, 'name' => 'public', 'name_key' => 'public', 'post_count' => 3, 'discussion_count' => 2, 'last_used_at' => Carbon::parse('2026-01-03'), 'created_at' => Carbon::parse('2026-01-01')],
-                ['id' => 2, 'name' => 'moderated', 'name_key' => 'moderated', 'post_count' => 1, 'discussion_count' => 1, 'last_used_at' => Carbon::parse('2026-01-02'), 'created_at' => Carbon::parse('2026-01-01')],
-                ['id' => 3, 'name' => 'private', 'name_key' => 'private', 'post_count' => 2, 'discussion_count' => 2, 'last_used_at' => Carbon::parse('2026-01-04'), 'created_at' => Carbon::parse('2026-01-01')],
+                ['id' => 1, 'name' => 'public', 'name_key' => 'public', 'created_at' => Carbon::parse('2026-01-01')],
+                ['id' => 2, 'name' => 'moderated', 'name_key' => 'moderated', 'created_at' => Carbon::parse('2026-01-01')],
+                ['id' => 3, 'name' => 'private', 'name_key' => 'private', 'created_at' => Carbon::parse('2026-01-01')],
             ],
             'post_hashtag' => [
                 ['post_id' => 1, 'hashtag_id' => 1, 'discussion_id' => 1],
@@ -126,7 +125,7 @@ class HashtagVisibilityTest extends TestCase
     #[Test]
     public function sorting_follows_the_visible_counts()
     {
-        // Stored totals put #private (last used 01-04) first; for a guest it isn't listed at all.
+        // Counting every use would put #private (last used 01-04) first; for a guest it isn't listed at all.
         $response = $this->send($this->request('GET', '/api/hashtags')->withQueryParams(['sort' => '-lastUsedAt']));
         $names = array_map(fn ($i) => $i['attributes']['name'], json_decode((string) $response->getBody(), true)['data']);
 

@@ -50,9 +50,28 @@ class PerPageSettingTest extends TestCase
             'above the API cap' => ['500', 100],
             'zero' => ['0', 1],
             'negative' => ['-5', 1],
-            'not a number' => ['lots', 60],
-            'blank' => ['', 60],
         ];
+    }
+
+    public static function notNumbers(): array
+    {
+        return ['blank' => [''], 'not a number' => ['lots']];
+    }
+
+    #[Test]
+    #[DataProvider('notNumbers')]
+    public function saving_a_non_number_resets_to_the_default(string $saved)
+    {
+        $this->setting('ernestdefoe-hashtags.per_page', '25');
+
+        $response = $this->send($this->request('POST', '/api/settings', [
+            'authenticatedAs' => 1,
+            'json' => ['ernestdefoe-hashtags.per_page' => $saved],
+        ]));
+
+        $this->assertSame(204, $response->getStatusCode(), (string) $response->getBody());
+        $this->assertNull($this->database()->table('settings')->where('key', 'ernestdefoe-hashtags.per_page')->value('value'));
+        $this->assertSame(60, $this->forumAttribute());
     }
 
     #[Test]

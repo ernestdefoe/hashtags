@@ -26,20 +26,13 @@ return Migration::createTableIfNotExists('hashtags', function (Blueprint $table)
      * InnoDB's 3072-byte limit, so no prefix index is needed.
      */
     $table->string('name', 60);
-    $table->string('name_key', 60)->unique('hashtags_name_key_unique');
+    $table->string('name_key', 60)->unique();
 
     /**
-     * Denormalised counters, recomputed by HashtagSyncer on every post save
-     * rather than incremented. Recomputing is one aggregate query over a
-     * narrow indexed pivot and cannot drift; incrementing would drift the
-     * first time a post is force-deleted or a job is retried.
+     * No stored counts: they depend on who is reading, so the API counts the
+     * posts the reader can see (VisibleUsage). Installs from before 2.2 had
+     * counter columns and hand-named indexes; the 2026_11_19 migration
+     * removes and renames them.
      */
-    $table->unsignedInteger('post_count')->default(0);
-    $table->unsignedInteger('discussion_count')->default(0);
-
-    $table->timestamp('last_used_at')->nullable();
     $table->timestamp('created_at')->useCurrent();
-
-    /** Index page ordering: most-used first, then most-recent. */
-    $table->index(['post_count', 'last_used_at'], 'hashtags_popularity_idx');
 });

@@ -8,6 +8,7 @@ use Flarum\Console\AbstractCommand;
 use Flarum\Formatter\Formatter;
 use Flarum\Post\CommentPost;
 use Illuminate\Database\ConnectionInterface;
+use Illuminate\Database\Eloquent\Collection;
 use Symfony\Component\Console\Input\InputOption;
 
 /**
@@ -37,6 +38,10 @@ use Symfony\Component\Console\Input\InputOption;
  */
 class ReindexCommand extends AbstractCommand
 {
+    protected const SKIPPED = 'skipped';
+    protected const INDEXED = 'indexed';
+    protected const REPARSED = 'reparsed';
+
     public function __construct(
         protected Formatter $formatter,
         protected HashtagSyncer $syncer,
@@ -73,9 +78,7 @@ class ReindexCommand extends AbstractCommand
             $this->info('Dry run — no posts will be modified.');
         }
 
-        $scanned = 0;
-        $changed = 0;
-        $indexed = 0;
+        $totals = ['scanned' => 0, 'changed' => 0, 'indexed' => 0];
 
         CommentPost::query()
             /**
@@ -88,97 +91,147 @@ class ReindexCommand extends AbstractCommand
             ->where(fn ($q) => $q
                 ->where('content', 'like', '%#%')
                 ->orWhereIn('id', fn ($sub) => $sub->select('post_id')->from('post_hashtag')))
+            // The formatter parses as the post's author: one query per chunk, not per post.
+            ->with('user')
             ->orderBy('id')
-            ->chunkById($chunk, function ($posts) use ($dryRun, &$scanned, &$changed, &$indexed) {
-                // One query per chunk: which of these posts already have rows.
-                $hasRows = array_flip($this->db->table('post_hashtag')
-                    ->whereIn('post_id', $posts->modelKeys())
-                    ->distinct()
-                    ->pluck('post_id')
-                    ->map(fn ($id) => (int) $id)
-                    ->all());
-
-                foreach ($posts as $post) {
-                    $scanned++;
-
-                    /**
-                     * `$post->content` is already the unparsed source —
-                     * HasFormattedContent's accessor unparses on read. Calling
-                     * the formatter's unparse() on it again would be a second
-                     * round trip over text that is no longer XML.
-                     */
-                    $source = $post->content;
-                    $matches = $source !== null && preg_match(ConfigureHashtags::REGEX, $source);
-
-                    /**
-                     * 🚨 The second reason to re-parse, and the one this
-                     * command exists for.
-                     *
-                     * `$matches` asks "does this post's text contain a hashtag
-                     * by TODAY's rules". A post that needs repairing is the
-                     * exact opposite: it holds a HASHTAG element that today's
-                     * rules would NOT produce — stored by an older version, by
-                     * an importer, or left behind when an exclusion was added.
-                     *
-                     * Gating the re-parse on `$matches` alone skipped every
-                     * one of them. After 2.0.7 excluded `#p123`, a reply
-                     * holding a stray `<HASHTAG name="p1233">` stopped
-                     * matching, so its row was cleared while the element
-                     * itself stayed in posts.content for ever: one forum
-                     * reported 1 post re-parsed out of 17,700 and ~1,050
-                     * replies left to fix by hand in SQL.
-                     */
-                    $hasStored = str_contains((string) $post->parsed_content, '<'.ConfigureHashtags::TAG);
-
-                    // Nothing in the text, nothing stored, no rows to clear.
-                    if (! $matches && ! $hasStored && ! isset($hasRows[(int) $post->id])) {
-                        continue;
-                    }
-
-                    $indexed++;
-
-                    if (($matches || $hasStored) && $source !== null) {
-                        $reparsed = $this->formatter->parse($source, $post, $post->user);
-
-                        // Identical XML means the post already had its hashtags
-                        // parsed (a re-run, or it was edited after install). Not
-                        // writing keeps edited_at and the post row untouched —
-                        // but it is still synced below: parsed is not indexed.
-                        if ($reparsed !== $post->parsed_content) {
-                            $changed++;
-
-                            if (! $dryRun) {
-                                /**
-                                 * Written with a direct UPDATE rather than $post->save():
-                                 * saving would fire Revised, which would queue a sync job
-                                 * per post on top of the one we run inline — and on a big
-                                 * forum that floods the queue with duplicate work.
-                                 */
-                                $post->newQuery()->whereKey($post->id)->update(['content' => $reparsed]);
-
-                                // setParsedContentAttribute, not `->content =`, which would
-                                // send the XML back through the parser a second time.
-                                $post->setParsedContentAttribute($reparsed);
-                            }
-                        }
-                    }
-
-                    if (! $dryRun) {
-                        // A full diff-and-replace for the post, so a re-run is a no-op.
-                        $this->syncer->sync($post);
-                    }
-                }
+            ->chunkById($chunk, function (Collection $posts) use ($dryRun, &$totals) {
+                $this->reindexChunk($posts, $dryRun, $totals);
 
                 // Braces are load-bearing: PHP identifiers may contain bytes >= 0x80, so
                 // "$changed…" parses as a variable named "changed…" and interpolates
                 // as empty. Reported "updated " with no number until this was braced.
-                $this->info("Scanned {$scanned} posts, re-parsed {$changed}, indexed {$indexed}…");
+                $this->info("Scanned {$totals['scanned']} posts, re-parsed {$totals['changed']}, indexed {$totals['indexed']}…");
             });
 
         $this->info($dryRun
-            ? "Done. {$changed} of {$scanned} posts would be re-parsed, {$indexed} posts would be indexed."
-            : "Done. {$changed} of {$scanned} posts re-parsed, {$indexed} posts indexed.");
+            ? "Done. {$totals['changed']} of {$totals['scanned']} posts would be re-parsed, {$totals['indexed']} posts would be indexed."
+            : "Done. {$totals['changed']} of {$totals['scanned']} posts re-parsed, {$totals['indexed']} posts indexed.");
 
         return 0;
+    }
+
+    /**
+     * @param Collection<int, CommentPost> $posts
+     * @param array{scanned: int, changed: int, indexed: int} $totals
+     */
+    protected function reindexChunk(Collection $posts, bool $dryRun, array &$totals): void
+    {
+        $hasRows = $this->postsWithRows($posts);
+        $toSync = [];
+
+        foreach ($posts as $post) {
+            $totals['scanned']++;
+
+            $outcome = $this->reindex($post, isset($hasRows[(int) $post->id]), $dryRun);
+
+            if ($outcome !== self::SKIPPED) {
+                $totals['indexed']++;
+                $toSync[] = $post;
+            }
+
+            if ($outcome === self::REPARSED) {
+                $totals['changed']++;
+            }
+        }
+
+        if (! $dryRun) {
+            // A full diff-and-replace for each post, so a re-run is a no-op.
+            // One batch per chunk, not a round of queries per post.
+            $this->syncer->syncMany($toSync);
+        }
+    }
+
+    /**
+     * Which of these posts already have rows, in one query per chunk.
+     *
+     * @param Collection<int, CommentPost> $posts
+     * @return array<int, int> post id => index
+     */
+    protected function postsWithRows(Collection $posts): array
+    {
+        return array_flip($this->db->table('post_hashtag')
+            ->whereIn('post_id', $posts->modelKeys())
+            ->distinct()
+            ->pluck('post_id')
+            ->map(fn ($id) => (int) $id)
+            ->all());
+    }
+
+    /**
+     * Re-parse one post if it needs it; the caller syncs its rows.
+     *
+     * @return string SKIPPED, INDEXED or REPARSED
+     */
+    protected function reindex(CommentPost $post, bool $hasRows, bool $dryRun): string
+    {
+        /**
+         * `$post->content` is already the unparsed source —
+         * HasFormattedContent's accessor unparses on read. Calling the
+         * formatter's unparse() on it again would be a second round trip over
+         * text that is no longer XML.
+         */
+        $source = $post->content;
+        $matches = $source !== null && preg_match(ConfigureHashtags::REGEX, $source);
+
+        /**
+         * 🚨 The second reason to re-parse, and the one this command exists for.
+         *
+         * `$matches` asks "does this post's text contain a hashtag by TODAY's
+         * rules". A post that needs repairing is the exact opposite: it holds
+         * a HASHTAG element that today's rules would NOT produce — stored by an
+         * older version, by an importer, or left behind when an exclusion was
+         * added.
+         *
+         * Gating the re-parse on `$matches` alone skipped every one of them.
+         * After 2.0.7 excluded `#p123`, a reply holding a stray
+         * `<HASHTAG name="p1233">` stopped matching, so its row was cleared
+         * while the element itself stayed in posts.content for ever: one forum
+         * reported 1 post re-parsed out of 17,700 and ~1,050 replies left to
+         * fix by hand in SQL.
+         */
+        $hasStored = str_contains((string) $post->parsed_content, '<'.ConfigureHashtags::TAG);
+
+        // Nothing in the text, nothing stored, no rows to clear.
+        if (! $matches && ! $hasStored && ! $hasRows) {
+            return self::SKIPPED;
+        }
+
+        return ($matches || $hasStored) && $source !== null && $this->reparse($post, $source, $dryRun)
+            ? self::REPARSED
+            : self::INDEXED;
+    }
+
+    /**
+     * Re-parse a post's source and write it back if the XML changed.
+     *
+     * Identical XML means the post already had its hashtags parsed (a re-run,
+     * or it was edited after install). Not writing keeps edited_at and the
+     * post row untouched — but it is still synced: parsed is not indexed.
+     *
+     * @return bool whether the XML changed
+     */
+    protected function reparse(CommentPost $post, string $source, bool $dryRun): bool
+    {
+        $reparsed = $this->formatter->parse($source, $post, $post->user);
+
+        if ($reparsed === $post->parsed_content) {
+            return false;
+        }
+
+        if (! $dryRun) {
+            /**
+             * Written with a direct UPDATE rather than $post->save(): saving
+             * would fire Revised, which would queue a sync job per post on top
+             * of the one run inline — and on a big forum that floods the queue
+             * with duplicate work.
+             */
+            $post->newQuery()->whereKey($post->id)->update(['content' => $reparsed]);
+
+            // setParsedContentAttribute, not `->content =`, which would send
+            // the XML back through the parser a second time.
+            $post->setParsedContentAttribute($reparsed);
+        }
+
+        return true;
     }
 }

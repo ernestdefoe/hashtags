@@ -5,6 +5,7 @@ namespace Ernestdefoe\Hashtags\Formatter;
 use Ernestdefoe\Hashtags\Model\Hashtag;
 use Flarum\Http\UrlGenerator;
 use s9e\TextFormatter\Configurator;
+use s9e\TextFormatter\Configurator\Items\Tag;
 use s9e\TextFormatter\Parser\Tag as FormatterTag;
 
 /**
@@ -66,9 +67,10 @@ class ConfigureHashtags
     public const TAG = 'HASHTAG';
 
     /**
-     * Longest hashtag we will match, in characters. Mirrored in the JS
-     * mentionable's query pattern and in HashtagSyncer::MAX_LENGTH — change
-     * all three together, and clear the formatter cache afterwards.
+     * Longest hashtag we will match, in characters: the two {0,29} runs plus
+     * one letter in REGEX. HashtagSyncer truncates to this, and the name
+     * columns are 60 wide. Change them together, and clear the formatter
+     * cache afterwards.
      */
     public const MAX_LENGTH = 59;
 
@@ -120,6 +122,14 @@ class ConfigureHashtags
     {
         $tag = $config->tags->add(self::TAG);
 
+        $this->addAttributes($tag);
+        $this->setTemplate($config, $tag);
+
+        $config->Preg->match(self::REGEX, self::TAG);
+    }
+
+    protected function addAttributes(Tag $tag): void
+    {
         $tag->attributes->add('name');
 
         /**
@@ -145,7 +155,10 @@ class ConfigureHashtags
              * save — so at worst a preview link differs from the saved one.
              */
             ->setJS('function(tag) { var n = tag.getAttribute("name"); tag.setAttribute("key", n ? n.toLowerCase() : ""); return true; }');
+    }
 
+    protected function setTemplate(Configurator $config, Tag $tag): void
+    {
         /**
          * The hashtag feed route prefix, captured once at compile time. If the
          * forum URL changes the formatter cache must be cleared — same caveat
@@ -154,11 +167,6 @@ class ConfigureHashtags
         $config->rendering->parameters['HASHTAG_URL'] =
             $this->url->to('forum')->route('hashtag', ['name' => '']);
 
-        /**
-         * The link text re-emits `#` plus the name EXACTLY as it was typed, so
-         * `#GameDay` renders as `#GameDay` even though it resolves to the same
-         * feed as `#gameday`. Casing is the author's; matching is not.
-         */
         /**
          * The link TEXT re-emits `#` plus the name exactly as it was typed, so
          * `#GameDay` reads as `#GameDay`. The link TARGET uses the folded key,
@@ -180,8 +188,6 @@ class ConfigureHashtags
                 </xsl:attribute>
                 <xsl:text>#</xsl:text><xsl:value-of select="@name"/>
             </a>';
-
-        $config->Preg->match(self::REGEX, self::TAG);
     }
 
     /**

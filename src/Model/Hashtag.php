@@ -3,27 +3,26 @@
 namespace Ernestdefoe\Hashtags\Model;
 
 use Flarum\Database\AbstractModel;
-use Flarum\Discussion\Discussion;
-use Flarum\Post\Post;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * @property int $id
  * @property string $name
  * @property string $name_key
+ * @property \Carbon\Carbon|null $created_at
+ *
+ * Not columns: selected by VisibleUsage, counted over the posts the reader can see.
  * @property int $post_count
  * @property int $discussion_count
  * @property \Carbon\Carbon|null $last_used_at
- * @property \Carbon\Carbon|null $created_at
  */
 class Hashtag extends AbstractModel
 {
     protected $table = 'hashtags';
 
     /**
-     * created_at is set by the column default and last_used_at is written
-     * explicitly by the syncer; there is no updated_at column, so letting
-     * Eloquent manage timestamps would try to write one that does not exist.
+     * created_at is set by the column default and there is no updated_at
+     * column, so letting Eloquent manage timestamps would try to write one
+     * that does not exist.
      */
     public $timestamps = false;
 
@@ -34,7 +33,7 @@ class Hashtag extends AbstractModel
         'created_at' => 'datetime',
     ];
 
-    protected $fillable = ['name', 'name_key', 'post_count', 'discussion_count', 'last_used_at'];
+    protected $fillable = ['name', 'name_key'];
 
     /**
      * Case-fold a hashtag into its lookup key.
@@ -46,17 +45,5 @@ class Hashtag extends AbstractModel
     public static function key(string $name): string
     {
         return mb_strtolower(trim($name), 'UTF-8');
-    }
-
-    /** @return BelongsToMany<Post, $this> */
-    public function posts(): BelongsToMany
-    {
-        return $this->belongsToMany(Post::class, 'post_hashtag', 'hashtag_id', 'post_id');
-    }
-
-    /** @return BelongsToMany<Discussion, $this> */
-    public function discussions(): BelongsToMany
-    {
-        return $this->belongsToMany(Discussion::class, 'post_hashtag', 'hashtag_id', 'discussion_id');
     }
 }

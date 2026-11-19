@@ -4,10 +4,10 @@ import HashtagMention from './mentionables/HashtagMention';
 /**
  * Add hashtags to the composer's existing `#` autocomplete.
  *
- * Lives in its own module because it (transitively) imports from
- * `ext:flarum/mentions/…`, which only resolves when mentions is installed.
- * The caller guards on `'flarum-mentions' in flarum.extensions`, so on a forum
- * without mentions this module is never reached.
+ * Lives in its own chunk because it (transitively) imports from
+ * `ext:flarum/mentions/…`, which only resolves when mentions is enabled.
+ * index.tsx imports it dynamically behind `'flarum-mentions' in
+ * flarum.extensions`, so on a forum without mentions it is never loaded.
  */
 export default function registerMentionable(): void {
   // `extendable` is true on core's HashMentionFormat, so this appends to the

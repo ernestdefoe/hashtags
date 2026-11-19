@@ -11,17 +11,15 @@ namespace Ernestdefoe\Hashtags\Settings;
  */
 class PerPage
 {
-    public const KEY = 'ernestdefoe-hashtags.per_page';
-    public const DEFAULT = 60;
     public const MAX = 100;
 
-    /** Settings arrive as strings, or null when never saved. */
-    public static function clamp(mixed $value): int
+    /**
+     * Keeps a saved value inside 1..MAX. Never-saved, blank and non-numeric
+     * values never get here as such: the default registered in extend.php
+     * covers the first, and resetWhen() deletes the others on save.
+     */
+    public static function clamp(int|string $value): int
     {
-        if (! is_numeric($value)) {
-            return self::DEFAULT;
-        }
-
         return max(1, min(self::MAX, (int) $value));
     }
 }

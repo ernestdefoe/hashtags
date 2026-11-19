@@ -8,14 +8,14 @@ use Flarum\Post\Post;
 
 /**
  * Real posts behind seeded hashtags. The list and its counts come from the
- * posts the actor can see (VisibleUsage), so a hashtag row on its own is no
- * longer listed: each needs public posts matching its post_count,
- * discussion_count and last_used_at.
+ * posts the actor can see (VisibleUsage), so a hashtag row on its own is not
+ * listed: each spec's post_count, discussion_count and last_used_at become
+ * public posts, and only id, name, name_key and created_at go in the row.
  */
 trait SeedsHashtagUse
 {
     /**
-     * @param array<int, array<string, mixed>> $hashtags rows for the hashtags table
+     * @param array<int, array<string, mixed>> $hashtags hashtag rows plus the use to seed behind them
      * @return array<string, array<int, array<string, mixed>>> to merge into prepareDatabase()
      */
     protected function hashtagUse(array $hashtags): array
@@ -42,7 +42,7 @@ trait SeedsHashtagUse
         return [
             Discussion::class => $discussions,
             Post::class => $posts,
-            'hashtags' => $hashtags,
+            'hashtags' => array_map(fn (array $hashtag) => array_diff_key($hashtag, array_flip(['post_count', 'discussion_count', 'last_used_at'])), $hashtags),
             'post_hashtag' => $pivot,
         ];
     }

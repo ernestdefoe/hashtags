@@ -5,8 +5,8 @@ import Form from 'flarum/common/components/Form';
 /**
  * Hashtags themselves deliberately have no settings.
  *
- * They are freeform: they exist because a post says so, and stop existing
- * when the last post using them changes. Anything configurable about them —
+ * They are freeform: they exist because a post says so, and stop showing up
+ * once no post uses them. Anything configurable about them —
  * renaming one, deleting one, capping their length after the fact — would
  * immediately disagree with the post text that produced it.
  *

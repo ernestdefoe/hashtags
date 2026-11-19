@@ -3,7 +3,6 @@
 use Ernestdefoe\Hashtags\Api\Resource\HashtagResource;
 use Ernestdefoe\Hashtags\Console\ReindexCommand;
 use Ernestdefoe\Hashtags\Formatter\ConfigureHashtags;
-use Ernestdefoe\Hashtags\Listener\RecountHashtagsOnPostDelete;
 use Ernestdefoe\Hashtags\Listener\SyncHashtagsOnPostSave;
 use Ernestdefoe\Hashtags\Model\Hashtag;
 use Ernestdefoe\Hashtags\Search\Filter\HashtagFilter;
@@ -12,7 +11,6 @@ use Ernestdefoe\Hashtags\Search\HashtagSearcher;
 use Ernestdefoe\Hashtags\Settings\PerPage;
 use Flarum\Discussion\Search\DiscussionSearcher;
 use Flarum\Extend;
-use Flarum\Post\Event\Deleted;
 use Flarum\Post\Event\Hidden;
 use Flarum\Post\Event\Posted;
 use Flarum\Post\Event\Restored;
@@ -22,6 +20,8 @@ use Flarum\Search\Database\DatabaseSearchDriver;
 return [
     (new Extend\Frontend('forum'))
         ->js(__DIR__.'/js/dist/forum.js')
+        // 🚨 Not optional: the two pages are chunks in here, and undeclared chunks 404.
+        ->jsDirectory(__DIR__.'/js/dist/forum')
         ->css(__DIR__.'/less/forum.less')
         /**
          * Route names matter beyond the frontend: ConfigureHashtags builds the
@@ -43,12 +43,14 @@ return [
     new Extend\ApiResource(HashtagResource::class),
 
     /**
-     * String-literal key, not PerPage::KEY: extend.php runs on every boot, and
+     * String-literal key, not a class constant: extend.php runs on every boot, and
      * reading the class at load time fatals every request while a deploy is
      * mid-way through updating the autoloader. Inside the closure it's fine.
      */
     (new Extend\Settings())
         ->default('ernestdefoe-hashtags.per_page', 60)
+        // A blank or non-numeric save deletes the setting, so it reads as the default again.
+        ->resetWhen('ernestdefoe-hashtags.per_page', fn ($value) => ! is_numeric($value))
         ->serializeToForum('hashtagsPerPage', 'ernestdefoe-hashtags.per_page', fn ($value) => PerPage::clamp($value)),
 
     (new Extend\SearchDriver(DatabaseSearchDriver::class))
@@ -75,11 +77,5 @@ return [
          * hidden_at rather than being told which way it moved.
          */
         ->listen(Hidden::class, SyncHashtagsOnPostSave::class)
-        ->listen(Restored::class, SyncHashtagsOnPostSave::class)
-        /**
-         * Its own listener class, not a second method on the one above:
-         * Extend\Event::listen() types its listener callable|string, and an
-         * [Class, 'instanceMethod'] array is not callable in PHP.
-         */
-        ->listen(Deleted::class, RecountHashtagsOnPostDelete::class),
+        ->listen(Restored::class, SyncHashtagsOnPostSave::class),
 ];

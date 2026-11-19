@@ -6,94 +6,76 @@ use Ernestdefoe\Hashtags\Formatter\ConfigureHashtags;
 use Ernestdefoe\Hashtags\Model\Hashtag;
 use Flarum\Post\CommentPost;
 use Flarum\Post\Post;
-use Illuminate\Database\Connection;
-use Illuminate\Database\Query\Builder;
+use Illuminate\Database\ConnectionInterface;
 use s9e\TextFormatter\Utils;
 
 /**
- * Reconciles one post's hashtag rows against the HASHTAG tags in its content.
+ * Reconciles posts' hashtag rows against the HASHTAG tags in their content.
  *
- * Called from the queued job on post save, and directly on hide/restore. The
- * operation is a full diff-and-replace for a single post, so running it twice
- * is a no-op — which matters because queue retries are not exactly-once.
+ * Called from the queued job (post saved, hidden or restored) and, a chunk of
+ * posts at a time, from `hashtags:reindex`. The operation is a full
+ * diff-and-replace for each post, so running it twice is a no-op — which
+ * matters because queue retries are not exactly-once.
+ *
+ * It keeps no counts and deletes no hashtags. What a hashtag counts depends
+ * on who is looking, so the API counts the posts the reader can see
+ * (VisibleUsage), and a hashtag no visible post uses is neither listed nor
+ * found. Its row stays, to be reused the next time someone writes it:
+ * deleting it here raced a concurrent sync inserting a row for the same
+ * hashtag, and the loser failed its job.
  */
 class HashtagSyncer
 {
-    /**
-     * Typed as the concrete Connection rather than ConnectionInterface because
-     * recount() needs getTablePrefix(), which the interface does not declare.
-     * Flarum binds ConnectionInterface to this class, so nothing changes at
-     * the container level.
-     */
-    public function __construct(protected Connection $db)
+    public function __construct(protected ConnectionInterface $db)
     {
     }
 
     public function sync(Post $post): void
     {
-        // Only comment posts carry user-authored content. Event posts
-        // (discussion renamed, tags changed, cross-reference backlinks…)
-        // have no XML to read and must never contribute hashtags.
-        if (! $post instanceof CommentPost) {
-            return;
-        }
-
-        $names = $this->visibleNames($post);
-
-        $this->db->transaction(function () use ($post, $names) {
-            $ids = $this->resolveIds($names);
-
-            // Which hashtags did this post point at BEFORE this sync? Union
-            // with the new set gives every hashtag whose counters can have
-            // changed — including ones the edit removed, which is the case a
-            // naive "recount what's in the post now" would silently miss.
-            $previous = $this->db->table('post_hashtag')
-                ->where('post_id', $post->id)
-                ->pluck('hashtag_id')
-                ->all();
-
-            $this->db->table('post_hashtag')->where('post_id', $post->id)->delete();
-
-            if ($ids) {
-                $this->db->table('post_hashtag')->insert(
-                    array_map(fn (int $id) => [
-                        'post_id' => (int) $post->id,
-                        'hashtag_id' => $id,
-                        'discussion_id' => (int) $post->discussion_id,
-                    ], array_values($ids))
-                );
-            }
-
-            $this->recount(array_unique(array_merge($previous, array_values($ids))));
-        });
+        $this->syncMany([$post]);
     }
 
     /**
-     * Recount after a post has already been deleted.
+     * One transaction and a fixed number of queries for any number of posts.
      *
-     * The pivot rows are gone by now (FK cascade), but the Deleted event still
-     * carries the post model in memory, so its content tells us exactly which
-     * hashtags need their totals corrected. Without this, deleting the only
-     * post using #foo would leave the hashtag sitting in the autocomplete with
-     * a stale count and an empty feed.
+     * @param iterable<Post> $posts
      */
-    public function recountFor(Post $post): void
+    public function syncMany(iterable $posts): void
     {
-        if (! $post instanceof CommentPost || $post->parsed_content === null) {
+        $names = $discussions = [];
+
+        foreach ($posts as $post) {
+            // Only comment posts carry user-authored content. Event posts
+            // (discussion renamed, tags changed, cross-reference backlinks…)
+            // have no XML to read and must never contribute hashtags.
+            if ($post instanceof CommentPost) {
+                $names[(int) $post->id] = $this->visibleNames($post);
+                $discussions[(int) $post->id] = (int) $post->discussion_id;
+            }
+        }
+
+        if (! $names) {
             return;
         }
 
-        $keys = array_keys($this->visibleNames($post, ignoreHidden: true));
+        $this->db->transaction(function () use ($names, $discussions) {
+            // `+` keeps the first spelling seen for a key, like namesFromXml().
+            $ids = $this->resolveIds(array_reduce($names, fn (array $all, array $post) => $all + $post, []));
 
-        if (! $keys) {
-            return;
-        }
+            $this->db->table('post_hashtag')->whereIn('post_id', array_keys($names))->delete();
 
-        // Resolve without creating — a hashtag that no longer exists needs no
-        // recount, and a delete must never bring one into being.
-        $ids = Hashtag::query()->whereIn('name_key', $keys)->pluck('id')->all();
+            $rows = [];
 
-        $this->recount(array_map('intval', $ids));
+            foreach ($names as $postId => $byKey) {
+                foreach (array_keys($byKey) as $key) {
+                    $rows[] = ['post_id' => $postId, 'hashtag_id' => $ids[$key], 'discussion_id' => $discussions[$postId]];
+                }
+            }
+
+            foreach (array_chunk($rows, 500) as $chunk) {
+                $this->db->table('post_hashtag')->insert($chunk);
+            }
+        });
     }
 
     /**
@@ -103,9 +85,9 @@ class HashtagSyncer
      * flagged, so unhiding has to re-sync (see SyncHashtagsOnPostSave, which
      * listens for Restored as well as Posted/Revised).
      */
-    protected function visibleNames(CommentPost $post, bool $ignoreHidden = false): array
+    protected function visibleNames(CommentPost $post): array
     {
-        if (! $ignoreHidden && $post->hidden_at !== null) {
+        if ($post->hidden_at !== null) {
             return [];
         }
 
@@ -196,10 +178,10 @@ class HashtagSyncer
              * both posts the same id.
              */
             $this->db->table('hashtags')->insertOrIgnore(
+                // created_at comes from the column default.
                 array_map(fn (string $key) => [
                     'name' => $names[$key],
                     'name_key' => $key,
-                    'created_at' => $this->db->raw('CURRENT_TIMESTAMP'),
                 ], array_values($missing))
             );
 
@@ -207,87 +189,5 @@ class HashtagSyncer
         }
 
         return array_map('intval', $existing);
-    }
-
-    /**
-     * The aggregate behind recount(), as a query rather than a result.
-     *
-     * 🚨 selectRaw() is passed through VERBATIM — the query builder only
-     * applies the table prefix to identifiers it wraps itself.
-     *
-     * `from`, `join`, `where` and `groupBy` all came out correctly prefixed
-     * while the select list did not, producing "Unknown column
-     * 'post_hashtag.hashtag_id' in 'field list'" on every install configured
-     * with a table prefix. Because this runs from the post-save sync, it did
-     * not just break `hashtags:reindex` — it made POST /api/discussions
-     * return a 500, so nobody could post at all.
-     *
-     * Interpolating getTablePrefix() is what core itself does; see
-     * Flarum\Post\Post::boot(), which builds its post-number expression the
-     * same way. An unprefixed install returns '', so both cases are correct.
-     *
-     * Split out from recount() so a test can assert the generated SQL under a
-     * prefix without needing a database — see tests/unit/TablePrefixTest.
-     *
-     * @param int[] $hashtagIds
-     */
-    public static function recountQuery(Connection $db, array $hashtagIds): Builder
-    {
-        $prefix = $db->getTablePrefix();
-        $pivot = $prefix.'post_hashtag';
-        $posts = $prefix.'posts';
-
-        return $db->table('post_hashtag')
-            ->join('posts', 'posts.id', '=', 'post_hashtag.post_id')
-            ->whereIn('post_hashtag.hashtag_id', $hashtagIds)
-            ->groupBy('post_hashtag.hashtag_id')
-            ->selectRaw($pivot.'.hashtag_id as hashtag_id')
-            ->selectRaw('COUNT(*) as post_count')
-            ->selectRaw('COUNT(DISTINCT '.$pivot.'.discussion_id) as discussion_count')
-            ->selectRaw('MAX('.$posts.'.created_at) as last_used_at');
-    }
-
-    /**
-     * Recompute post_count, discussion_count and last_used_at from the pivot
-     * for the given hashtags, and delete any that no post uses any more.
-     *
-     * Recomputed rather than incremented on purpose: an aggregate over the
-     * feed index cannot drift, whereas a counter that is incremented on save
-     * and decremented on delete drifts the first time a job is retried or a
-     * post is removed by a FK cascade (which fires no Flarum event).
-     *
-     * @param int[] $hashtagIds
-     */
-    protected function recount(array $hashtagIds): void
-    {
-        if (! $hashtagIds) {
-            return;
-        }
-
-        $totals = self::recountQuery($this->db, $hashtagIds)
-            ->get()
-            ->keyBy('hashtag_id');
-
-        foreach ($hashtagIds as $id) {
-            $row = $totals->get($id);
-
-            if ($row === null) {
-                /**
-                 * Nothing references it any more. Deleting keeps the
-                 * autocomplete and the index page free of hashtags that would
-                 * lead to an empty feed; the row is recreated the moment
-                 * somebody writes it again.
-                 */
-                Hashtag::query()->whereKey($id)->delete();
-
-                continue;
-            }
-
-            Hashtag::query()->whereKey($id)->update([
-                'post_count' => (int) $row->post_count,
-                'discussion_count' => (int) $row->discussion_count,
-                'last_used_at' => $row->last_used_at,
-            ]);
-        }
     }
 }

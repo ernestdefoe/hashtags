@@ -4,9 +4,7 @@ namespace Ernestdefoe\Hashtags\Job;
 
 use Ernestdefoe\Hashtags\Hashtag\HashtagSyncer;
 use Flarum\Post\Post;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Queue\InteractsWithQueue;
+use Flarum\Queue\AbstractJob;
 
 /**
  * Reconcile one post's hashtags off-request.
@@ -15,22 +13,19 @@ use Illuminate\Queue\InteractsWithQueue;
  * post may have been edited again or deleted, and a serialised copy would
  * write stale hashtags back over the newer ones.
  */
-class SyncHashtagsJob implements ShouldQueue
+class SyncHashtagsJob extends AbstractJob
 {
-    // Queueable carries $queue, which the queue reads when it pushes the job
-    // (fof/horizon warned "Undefined property ...::$queue" on every push).
-    use Queueable, InteractsWithQueue;
-
     public function __construct(protected int $postId)
     {
+        parent::__construct();
     }
 
     public function handle(HashtagSyncer $syncer): void
     {
         $post = Post::query()->find($this->postId);
 
-        // Deleted between save and run — the FK cascade already removed the
-        // pivot rows, and the Deleted listener has done the recount.
+        // Deleted between save and run: the FK cascade already removed the
+        // post's rows, so there is nothing to sync.
         if ($post === null) {
             return;
         }

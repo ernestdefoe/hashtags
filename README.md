@@ -142,16 +142,17 @@ It also rebuilds the hashtag index from every post with a hashtag — including 
 
 The hashtag list and its counts follow what each reader can see. A hashtag is listed only if it's used in at least one post the reader can see, and its post count, discussion count and last-used date count only those posts. A hashtag used only in a hidden, private or restricted-tag discussion doesn't appear for anyone who can't see that discussion, and `/api/hashtags/{name}` answers 404 for it. Each feed is a normal discussion search, so it's scoped the same way.
 
-That is a deliberate trade: it reveals that a word has been used somewhere, never a discussion, a title or an author. If your forum needs the stricter behaviour, the place to change it is `HashtagSearcher::getQuery()`.
+Guests all see the same posts, so they share one cached copy of the list for up to a minute; a post hidden in the meantime drops out of their list within that minute. Members are counted live.
 
-Hidden posts contribute nothing. Hiding a post retracts its hashtags and restoring reinstates them; deleting a post removes its rows and corrects the counts.
+Hidden posts contribute nothing. Hiding a post retracts its hashtags and restoring reinstates them; once no post you can see uses a hashtag, it isn't listed and its page is empty. Its row is kept and reused if someone writes it again.
 
 ## For developers
 
 | Piece | Where |
 |---|---|
 | Tag registration and the pattern | `src/Formatter/ConfigureHashtags.php` |
-| Extraction, case folding, counters | `src/Hashtag/HashtagSyncer.php` |
+| Extraction, case folding, the post index | `src/Hashtag/HashtagSyncer.php` |
+| Visible-only list and counts | `src/Search/VisibleUsage.php` |
 | `hashtag:` discussion filter | `src/Search/Filter/HashtagFilter.php` |
 | `GET /api/hashtags` | `src/Api/Resource/HashtagResource.php` |
 | Backfill | `src/Console/ReindexCommand.php` |
@@ -159,9 +160,9 @@ Hidden posts contribute nothing. Hiding a post retracts its hashtags and restori
 
 Two tables: `hashtags` (one row per distinct hashtag, keyed on a case-folded `name_key`) and `post_hashtag` (which posts use which, with `discussion_id` denormalised so the feed is one indexed subquery).
 
-Counters are **recomputed** from the pivot on every sync rather than incremented. An aggregate over a narrow index can't drift; a counter that is incremented on save and decremented on delete drifts the first time a queued job is retried or a row disappears through a foreign-key cascade, which fires no Flarum event.
+There are no stored counters. What a hashtag counts depends on who is reading, so every count is an aggregate over `post_hashtag`, joined to the posts the reader can see. Nothing can drift, whether a queued job is retried or rows disappear through a foreign-key cascade.
 
-The API resource is read-only on purpose. Hashtags come into being by being written in a post and stop existing when the last post using one is edited or deleted — an admin "editing" a hashtag would immediately disagree with the text that produced it.
+The API resource is read-only on purpose. Hashtags come into being by being written in a post and stop showing up once no post uses them — an admin "editing" a hashtag would immediately disagree with the text that produced it.
 
 ## Support
 

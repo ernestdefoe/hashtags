@@ -16,10 +16,10 @@ use Tobyz\JsonApiServer\Context;
  * Read-only JSON:API resource for hashtags (`/api/hashtags`).
  *
  * Read-only on purpose: hashtags are freeform, so they come into being by
- * being written in a post and cease to exist when the last post using them is
- * edited or deleted (HashtagSyncer). There is no create/update/delete story —
- * an admin "editing" a hashtag would silently disagree with the post text that
- * produced it.
+ * being written in a post, and once no post the reader can see uses one, it
+ * is neither listed nor found (VisibleUsage). There is no create/update/delete
+ * story — an admin "editing" a hashtag would silently disagree with the post
+ * text that produced it.
  *
  * @extends AbstractDatabaseResource<Hashtag>
  */
@@ -36,9 +36,10 @@ class HashtagResource extends AbstractDatabaseResource
     }
 
     /**
-     * The same scope as the list (see VisibleUsage), for any query built from
-     * this resource. Show doesn't go through here: find() below applies it to
-     * the one hashtag it resolves.
+     * The visibility scope (VisibleUsage) for every query built from this
+     * resource. The list runs it in HashtagSearcher instead, after its
+     * filters, so the aggregate only covers the hashtags that match; Show
+     * runs it in find() below for the one hashtag it resolves.
      */
     public function scope(Builder $query, Context $context): void
     {
@@ -74,7 +75,8 @@ class HashtagResource extends AbstractDatabaseResource
          */
         $hashtagId = Hashtag::query()
             ->when(
-                is_numeric($id),
+                // ctype_digit, not is_numeric: "1e3" or "0x1A" is a name, not an id.
+                ctype_digit($id),
                 fn (Builder $query) => $query->whereKey((int) $id),
                 fn (Builder $query) => $query->where('name_key', Hashtag::key(rawurldecode($id)))
             )
@@ -85,8 +87,8 @@ class HashtagResource extends AbstractDatabaseResource
         }
 
         /**
-         * Count this one hashtag's visible use, not every hashtag's: scope()
-         * aggregates them all, which a single lookup doesn't need.
+         * The same visibility scope as the list (HashtagSearcher), counted for
+         * this one hashtag only.
          */
         $query = Hashtag::query()->whereKey($hashtagId);
 

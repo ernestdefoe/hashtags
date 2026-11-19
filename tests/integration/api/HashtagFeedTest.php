@@ -50,8 +50,8 @@ class HashtagFeedTest extends TestCase
             Discussion::class => $discussions,
             Post::class => $posts,
             'hashtags' => [
-                ['id' => 1, 'name' => 'GameDay', 'name_key' => 'gameday', 'post_count' => 20, 'discussion_count' => 20],
-                ['id' => 2, 'name' => 'secret', 'name_key' => 'secret', 'post_count' => 1, 'discussion_count' => 1],
+                ['id' => 1, 'name' => 'GameDay', 'name_key' => 'gameday', ],
+                ['id' => 2, 'name' => 'secret', 'name_key' => 'secret', ],
             ],
             'post_hashtag' => $pivot,
         ]);

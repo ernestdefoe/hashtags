@@ -22,13 +22,11 @@ return Migration::createTableIfNotExists('post_hashtag', function (Blueprint $ta
     $table->primary(['post_id', 'hashtag_id']);
 
     /** Feed lookup: every discussion using this hashtag. */
-    $table->index(['hashtag_id', 'discussion_id'], 'post_hashtag_feed_idx');
+    $table->index(['hashtag_id', 'discussion_id']);
 
     /**
-     * Hard-deleting a post or discussion removes its pivot rows. The counters
-     * on `hashtags` are NOT corrected by the cascade — they are recomputed on
-     * the next save touching that hashtag, and the feed reads through the
-     * pivot, so a stale counter is cosmetic and self-heals.
+     * Hard-deleting a post or discussion removes its pivot rows. Counts are
+     * read live from the pivot, so there is nothing to correct afterwards.
      */
     $table->foreign('post_id')
           ->references('id')->on('posts')
