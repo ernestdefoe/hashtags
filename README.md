@@ -138,13 +138,21 @@ Only posts that actually contain a hashtag are ever rewritten. The command filte
 
 It also rebuilds the hashtag index from every post with a hashtag — including posts that were parsed but never indexed (written while the queue was down, or imported) — and clears rows left for posts that no longer have one. It is idempotent: a second run reports `0 … re-parsed`. Use `--chunk` to change the batch size (default 500).
 
+## Cleaning up unused hashtags
+
+A hashtag no post uses any more stops being listed straight away, and its row is kept so it can be reused. Once a day, `hashtags:prune` deletes the unused ones that were first written more than 30 days ago, so one-off and spam tags don't pile up. It runs from Flarum's scheduler, so make sure the [scheduler cron job](https://docs.flarum.org/2.x/scheduler) is set up. To run it by hand:
+
+```bash
+php flarum hashtags:prune
+```
+
 ## Permissions and privacy
 
 The hashtag list and its counts follow what each reader can see. A hashtag is listed only if it's used in at least one post the reader can see, and its post count, discussion count and last-used date count only those posts. A hashtag used only in a hidden, private or restricted-tag discussion doesn't appear for anyone who can't see that discussion, and `/api/hashtags/{name}` answers 404 for it. Each feed is a normal discussion search, so it's scoped the same way.
 
 Guests all see the same posts, so they share one cached copy of the list for up to a minute; a post hidden in the meantime drops out of their list within that minute. Members are counted live.
 
-Hidden posts contribute nothing. Hiding a post retracts its hashtags and restoring reinstates them; once no post you can see uses a hashtag, it isn't listed and its page is empty. Its row is kept and reused if someone writes it again.
+Hidden posts contribute nothing. Hiding a post retracts its hashtags and restoring reinstates them; once no post you can see uses a hashtag, it isn't listed and its page is empty. Its row is kept and reused if someone writes it again, and the daily prune deletes it once it is unused and more than 30 days old.
 
 ## For developers
 

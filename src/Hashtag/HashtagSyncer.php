@@ -7,6 +7,7 @@ use Ernestdefoe\Hashtags\Model\Hashtag;
 use Flarum\Post\CommentPost;
 use Flarum\Post\Post;
 use Illuminate\Database\ConnectionInterface;
+use Illuminate\Database\QueryException;
 use s9e\TextFormatter\Utils;
 
 /**
@@ -22,10 +23,18 @@ use s9e\TextFormatter\Utils;
  * (VisibleUsage), and a hashtag no visible post uses is neither listed nor
  * found. Its row stays, to be reused the next time someone writes it:
  * deleting it here raced a concurrent sync inserting a row for the same
- * hashtag, and the loser failed its job.
+ * hashtag, and the loser failed its job. `hashtags:prune` (daily) deletes
+ * unused hashtags first written more than 30 days ago.
  */
 class HashtagSyncer
 {
+    /**
+     * SQLSTATEs a foreign key violation arrives as: 23000 on MySQL and SQLite
+     * (which use it for every integrity violation), 23503 on PostgreSQL.
+     * Retrying the sync after any of them is harmless: it is idempotent.
+     */
+    public const INTEGRITY_VIOLATIONS = ['23000', '23503'];
+
     public function __construct(protected ConnectionInterface $db)
     {
     }
@@ -58,24 +67,50 @@ class HashtagSyncer
             return;
         }
 
-        $this->db->transaction(function () use ($names, $discussions) {
-            // `+` keeps the first spelling seen for a key, like namesFromXml().
-            $ids = $this->resolveIds(array_reduce($names, fn (array $all, array $post) => $all + $post, []));
+        // Two attempts: Laravel retries a deadlock, which MySQL can raise when
+        // this meets hashtags:prune's DELETE.
+        $write = fn () => $this->db->transaction(fn () => $this->write($names, $discussions), 2);
 
-            $this->db->table('post_hashtag')->whereIn('post_id', array_keys($names))->delete();
-
-            $rows = [];
-
-            foreach ($names as $postId => $byKey) {
-                foreach (array_keys($byKey) as $key) {
-                    $rows[] = ['post_id' => $postId, 'hashtag_id' => $ids[$key], 'discussion_id' => $discussions[$postId]];
-                }
+        try {
+            $write();
+        } catch (QueryException $e) {
+            /**
+             * `hashtags:prune` deleted one of these hashtags between our
+             * lookup and our insert (it only deletes unused ones, and the
+             * foreign key refuses to delete a used one, so this is its
+             * window). The insert's foreign key caught it; running again
+             * recreates the hashtag. Any other error is not ours to swallow.
+             */
+            if (! in_array((string) $e->getCode(), self::INTEGRITY_VIOLATIONS, true)) {
+                throw $e;
             }
 
-            foreach (array_chunk($rows, 500) as $chunk) {
-                $this->db->table('post_hashtag')->insert($chunk);
+            $write();
+        }
+    }
+
+    /**
+     * @param array<int, array<string, string>> $names post id => [key => display name]
+     * @param array<int, int> $discussions post id => discussion id
+     */
+    protected function write(array $names, array $discussions): void
+    {
+        // `+` keeps the first spelling seen for a key, like namesFromXml().
+        $ids = $this->resolveIds(array_reduce($names, fn (array $all, array $post) => $all + $post, []));
+
+        $this->db->table('post_hashtag')->whereIn('post_id', array_keys($names))->delete();
+
+        $rows = [];
+
+        foreach ($names as $postId => $byKey) {
+            foreach (array_keys($byKey) as $key) {
+                $rows[] = ['post_id' => $postId, 'hashtag_id' => $ids[$key], 'discussion_id' => $discussions[$postId]];
             }
-        });
+        }
+
+        foreach (array_chunk($rows, 500) as $chunk) {
+            $this->db->table('post_hashtag')->insert($chunk);
+        }
     }
 
     /**

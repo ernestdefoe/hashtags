@@ -25,16 +25,20 @@ return Migration::createTableIfNotExists('post_hashtag', function (Blueprint $ta
     $table->index(['hashtag_id', 'discussion_id']);
 
     /**
-     * Hard-deleting a post or discussion removes its pivot rows. Counts are
-     * read live from the pivot, so there is nothing to correct afterwards.
+     * Hard-deleting a post or discussion removes its rows. Counts are read
+     * live from the pivot, so there is nothing to correct afterwards.
      */
     $table->foreign('post_id')
           ->references('id')->on('posts')
           ->cascadeOnDelete();
 
+    /**
+     * RESTRICT, not cascade: a hashtag in use must never be deleted out from
+     * under its posts. hashtags:prune relies on this when it races a sync.
+     */
     $table->foreign('hashtag_id')
           ->references('id')->on('hashtags')
-          ->cascadeOnDelete();
+          ->restrictOnDelete();
 
     $table->foreign('discussion_id')
           ->references('id')->on('discussions')

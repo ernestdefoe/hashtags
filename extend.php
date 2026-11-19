@@ -1,6 +1,7 @@
 <?php
 
 use Ernestdefoe\Hashtags\Api\Resource\HashtagResource;
+use Ernestdefoe\Hashtags\Console\PruneCommand;
 use Ernestdefoe\Hashtags\Console\ReindexCommand;
 use Ernestdefoe\Hashtags\Formatter\ConfigureHashtags;
 use Ernestdefoe\Hashtags\Listener\SyncHashtagsOnPostSave;
@@ -16,6 +17,7 @@ use Flarum\Post\Event\Posted;
 use Flarum\Post\Event\Restored;
 use Flarum\Post\Event\Revised;
 use Flarum\Search\Database\DatabaseSearchDriver;
+use Illuminate\Console\Scheduling\Event;
 
 return [
     (new Extend\Frontend('forum'))
@@ -66,7 +68,11 @@ return [
      * hashtag links.
      */
     (new Extend\Console())
-        ->command(ReindexCommand::class),
+        ->command(ReindexCommand::class)
+        ->command(PruneCommand::class)
+        ->schedule(PruneCommand::class, function (Event $event): void {
+            $event->daily()->withoutOverlapping();
+        }),
 
     (new Extend\Event())
         ->listen(Posted::class, SyncHashtagsOnPostSave::class)

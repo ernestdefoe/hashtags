@@ -59,6 +59,22 @@ class DropCountersMigrationTest extends TestCase
             $table->index(['hashtag_id', 'discussion_id'], 'post_hashtag_feed_idx');
             $table->dropIndex(['hashtag_id', 'discussion_id']);
         });
+
+        $schema->table('post_hashtag', function (Blueprint $table) {
+            $table->dropForeign(['hashtag_id']);
+            $table->foreign('hashtag_id')->references('id')->on('hashtags')->cascadeOnDelete();
+        });
+    }
+
+    private function hashtagOnDelete(): string
+    {
+        foreach ($this->schema()->getForeignKeys('post_hashtag') as $key) {
+            if ($key['columns'] === ['hashtag_id']) {
+                return strtolower((string) $key['on_delete']);
+            }
+        }
+
+        return 'none';
     }
 
     /** @return string[] lower-cased index names */
@@ -81,16 +97,24 @@ class DropCountersMigrationTest extends TestCase
             $this->assertFalse($schema->hasColumn('hashtags', $column), "$column should be gone");
         }
 
+        $this->assertSame('restrict', $this->hashtagOnDelete());
+
         $this->assertNotContains('hashtags_popularity_idx', $this->indexes('hashtags'));
         $this->assertNotContains('post_hashtag_feed_idx', $this->indexes('post_hashtag'));
         $this->assertContains($prefix.'hashtags_name_key_unique', $this->indexes('hashtags'));
         $this->assertContains($prefix.'post_hashtag_hashtag_id_discussion_id_index', $this->indexes('post_hashtag'));
+
+        // Again, on the converted schema: every step finds nothing to do.
+        $after = [$this->indexes('hashtags'), $this->indexes('post_hashtag')];
+        ($this->migration()['up'])($this->schema());
+        $this->assertSame($after, [$this->indexes('hashtags'), $this->indexes('post_hashtag')]);
     }
 
     #[Test]
     public function it_passes_over_a_fresh_install_and_rolls_back()
     {
         $before = [$this->indexes('hashtags'), $this->indexes('post_hashtag')];
+        $this->assertSame('restrict', $this->hashtagOnDelete(), 'a fresh install restricts already');
 
         ($this->migration()['up'])($this->schema());
 
@@ -99,11 +123,18 @@ class DropCountersMigrationTest extends TestCase
         ($this->migration()['down'])($this->schema());
 
         $this->assertTrue($this->schema()->hasColumn('hashtags', 'post_count'));
+        $this->assertSame('cascade', $this->hashtagOnDelete(), 'down() restores the cascade');
+        $this->assertContains(
+            ['post_count', 'last_used_at'],
+            array_column($this->schema()->getIndexes('hashtags'), 'columns'),
+            'down() restores the counters index'
+        );
 
         // Again, which also leaves the schema as the other tests expect it:
         // schema changes are not undone by the test's transaction on MySQL.
         ($this->migration()['up'])($this->schema());
 
         $this->assertFalse($this->schema()->hasColumn('hashtags', 'post_count'));
+        $this->assertSame('restrict', $this->hashtagOnDelete());
     }
 }
